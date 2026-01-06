@@ -1,0 +1,25 @@
+# --- IDE & System ---
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.log
+__pycache__/
+*.py[cod]
+
+
+# --- Python ---
+*.pyc
+*.pyo
+
+# Virtual Environments
+py3.10-venv/
+.py3.10-venv/
+
+
+# --- Operating System Files ---
+.DS_Store
+Thumbs.db
+
+# --- Development Logs ---
+*.log
