@@ -609,7 +609,6 @@ from enum import IntEnum
 import screen_brightness_control as sbcontrol
 
 # --- MACOS PATCH: Mock Windows Audio Libraries ---
-# We verify OS to avoid importing Windows-only libraries
 IS_MACOS = platform.system() == "Darwin"
 
 if not IS_MACOS:
@@ -619,6 +618,7 @@ if not IS_MACOS:
 # -------------------------------------------------
 
 pyautogui.FAILSAFE = False
+# SAFETY: Use the safe import for mediapipe solutions
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
@@ -748,32 +748,25 @@ class Controller:
         return dist
     
     def changesystembrightness():
-        """Mac-Compatible Brightness Control"""
-        # Calculate target brightness (0.0 to 1.0)
-        # pinchlv roughly ranges from -5 to +5 based on pinch distance
         try:
             current = sbcontrol.get_brightness()
             if isinstance(current, list): current = current[0]
             current = current / 100.0
         except:
-            current = 0.5 # fallback
+            current = 0.5 
 
         new_level = current + (Controller.pinchlv / 50.0)
         new_level = max(0.0, min(1.0, new_level))
         
         if IS_MACOS:
-            # Use the 'brightness' brew tool
             os.system(f"brightness {new_level}")
         else:
             sbcontrol.fade_brightness(int(100*new_level))
     
     def changesystemvolume():
-        """Mac-Compatible Volume Control"""
-        # Range 0 to 100
-        vol_change = Controller.pinchlv / 50.0 # Scaling factor
+        vol_change = Controller.pinchlv / 50.0 
         
         if IS_MACOS:
-            # Get current volume using osascript
             try:
                 cmd = "osascript -e 'output volume of (get volume settings)'"
                 current_vol = int(subprocess.check_output(cmd, shell=True).strip())
@@ -783,7 +776,6 @@ class Controller:
             except:
                 pass
         else:
-            # Windows Logic
             devices = AudioUtilities.GetSpeakers()
             interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
             volume = cast(interface, POINTER(IAudioEndpointVolume))
@@ -796,7 +788,6 @@ class Controller:
         pyautogui.scroll(10 if Controller.pinchlv>0.0 else -10)
         
     def scrollHorizontal():
-        # Mac usually handles horizontal scroll with simple scroll() or different keys
         pyautogui.keyDown('shift')
         pyautogui.scroll(10 if Controller.pinchlv>0.0 else -10)
         pyautogui.keyUp('shift')
@@ -922,16 +913,30 @@ class GestureController:
     dom_hand = True
 
     def __init__(self):
+        print("[DEBUG] Initializing GestureController...")
         GestureController.gc_mode = 1
-        # Mac often requires index 1 or AVFoundation tweaks, but 0 usually works for built-in
+        
+        # --- CAMERA INIT ATTEMPT 1 (Default) ---
+        print("[DEBUG] Attempting to open Camera 0...")
         GestureController.cap = cv2.VideoCapture(0)
+        
+        # --- CAMERA INIT ATTEMPT 2 (Fallback for some Macs) ---
+        if not GestureController.cap.isOpened():
+             print("[DEBUG] Camera 0 failed. Attempting Camera 1...")
+             GestureController.cap = cv2.VideoCapture(1)
+
+        if not GestureController.cap.isOpened():
+             print("[CRITICAL ERROR] Could not open ANY camera. Check Permissions!")
+             GestureController.gc_mode = 0
+             return
+
         GestureController.CAM_HEIGHT = GestureController.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
         GestureController.CAM_WIDTH = GestureController.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        print(f"[DEBUG] Camera Initialized: {int(GestureController.CAM_WIDTH)}x{int(GestureController.CAM_HEIGHT)}")
     
     def classify_hands(results):
         left , right = None,None
         try:
-            # Mediapipe classification wrapper
             for idx, hand_handedness in enumerate(results.multi_handedness):
                 label = hand_handedness.classification[0].label
                 if label == 'Right':
@@ -949,15 +954,23 @@ class GestureController:
             GestureController.hr_minor = right
 
     def start(self):
+        if GestureController.gc_mode == 0:
+            print("[DEBUG] GC Mode is 0. Exiting start().")
+            return
+
+        print("[DEBUG] Starting Main Loop...")
         handmajor = HandRecog(HLabel.MAJOR)
         handminor = HandRecog(HLabel.MINOR)
 
         with mp_hands.Hands(max_num_hands = 2,min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
             while GestureController.cap.isOpened() and GestureController.gc_mode:
+                
                 success, image = GestureController.cap.read()
                 if not success:
-                    print("Ignoring empty camera frame.")
+                    print("[DEBUG] Ignoring empty camera frame.")
                     continue
+                
+                # print(".", end="", flush=True) # Dot heartbeat
                 
                 image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
                 image.flags.writeable = False
@@ -985,11 +998,20 @@ class GestureController:
                         mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
                 else:
                     Controller.prev_hand = None
+                
                 cv2.imshow('Gesture Controller', image)
+                
+                # Check for ENTER key (13) to exit
                 if cv2.waitKey(5) & 0xFF == 13:
+                    print("\n[DEBUG] Exit key pressed.")
                     break
+        
+        print("[DEBUG] Releasing camera and closing windows.")
         GestureController.cap.release()
         cv2.destroyAllWindows()
-        if __name__ == "__main__":
-            gc = GestureController()
-            gc.start()
+
+# --- ENTRY POINT (Crucial for testing) ---
+if __name__ == "__main__":
+    print("[DEBUG] Running Gesture_Controller as main script")
+    gc = GestureController()
+    gc.start()

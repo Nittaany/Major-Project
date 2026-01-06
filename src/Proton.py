@@ -375,14 +375,12 @@ def respond(voice_data):
         sys.exit()
     
     # DYNAMIC CONTROLS
-    elif 'launch gesture recognition' in voice_data:
-        if Gesture_Controller.GestureController.gc_mode:
-            reply('Gesture recognition is already active')
-        else:
-            gc = Gesture_Controller.GestureController()
-            t = Thread(target = gc.start)
-            t.start()
-            reply('Launched Successfully')
+    elif 'launch gesture' in voice_data: 
+        # We shortened the command to "launch gesture" to make it easier to say
+        reply('Launching Gesture System...')
+        # MAC FIX: Use subprocess to launch a separate, independent window
+        # This bypasses the macOS threading restriction.
+        subprocess.Popen([sys.executable, 'src/Gesture_Controller.py'])
 
     elif ('stop gesture recognition' in voice_data):
         if Gesture_Controller.GestureController.gc_mode:
