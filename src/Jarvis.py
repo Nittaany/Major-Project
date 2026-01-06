@@ -305,7 +305,7 @@ def wish():
         reply("Good Afternoon!")   
     else:
         reply("Good Evening!")  
-    reply("I am Proton, how may I help you?")
+    reply("I am Jarvis. Online and ready sir!")
 
 def record_audio():
     with sr.Microphone() as source:
@@ -330,14 +330,27 @@ def open_file_mac(filepath):
 def respond(voice_data):
     global file_exp_status, files, is_awake, path
     print(voice_data)
-    voice_data.replace('proton','')
+    voice_data.replace('jarvis', '')
     app.eel.addUserMsg(voice_data)
 
     if is_awake==False:
         if 'wake up' in voice_data:
             is_awake = True
             wish()
-    
+    # --- NEW SHORT & SWEET COMMANDS ---
+
+    # COMMAND: "Proton Start"
+    if 'start' in voice_data:
+        reply('Starting System...')
+        # Launches the camera window as a separate process
+        subprocess.Popen([sys.executable, 'src/Gesture_Controller.py'])
+
+    # COMMAND: "Proton Stop"
+    elif 'stop' in voice_data:
+        reply('Stopping System...')
+        # MAC FIX: Force kills the camera process because it's running separately
+        os.system("pkill -f Gesture_Controller.py")
+
     elif 'hello' in voice_data:
         wish()
     elif 'what is your name' in voice_data:
@@ -382,7 +395,7 @@ def respond(voice_data):
         # This bypasses the macOS threading restriction.
         subprocess.Popen([sys.executable, 'src/Gesture_Controller.py'])
 
-    elif ('stop gesture recognition' in voice_data):
+    elif ('stop gesture' in voice_data):
         if Gesture_Controller.GestureController.gc_mode:
             Gesture_Controller.GestureController.gc_mode = 0
             reply('Gesture recognition stopped')
@@ -470,7 +483,7 @@ while True:
     else:
         voice_data = record_audio()
 
-    if 'proton' in voice_data:
+    if 'jarvis' in voice_data:
         try:
             respond(voice_data)
         except SystemExit:
