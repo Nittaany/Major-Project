@@ -2,13 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>J.A.R.V.I.S | Neural Interface</title>
+  <title>J.A.R.V.I.S | Major Project</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
   <script type="text/javascript" src="/eel.js"></script>
-  
   <link rel="stylesheet" href="css/jquery.convform.css" />
   <link rel="stylesheet" href="css/jarvis-ui.css" />
 </head>
@@ -23,11 +22,11 @@
     <header class="hud-header">
       <div class="logo-area">
         <div class="logo-icon">
-          <img src="images/icon.png" alt="AI Core">
+          <div class="hud-circle"></div> 
         </div>
         <div class="logo-text">
           <h1>J.A.R.V.I.S</h1>
-          <span class="subtitle">NEURAL LINK V.2.0</span>
+          <span class="subtitle">BACHELOR MAJOR RESEARCH PROJECT</span>
         </div>
       </div>
       
@@ -43,30 +42,91 @@
       </div>
     </div>
 
-    <div id="convForm" class="convFormDynamic hud-footer">
+ <div id="convForm" class="convFormDynamic hud-input-area">
       <div class="options dragscroll"></div>
       
-      <div class="input-group">
-        <input
-          type="text"
-          id="userInput"
-          class="userInputDynamic"
-          placeholder="Awaiting command..."
-          autocomplete="off"
-        />
-        <button id="userInputButton" type="button" class="submit-btn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-        </button>
+      <input type="text" id="userInput" class="userInputDynamic" style="display:none;" />
+      <button id="userInputButton" type="button" class="submit-btn" style="display:none;">▶</button>
+
+      <div class="voice-interface">
+        <div class="sound-wave">
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+          <div class="bar"></div>
+        </div>
+        <div class="voice-label">
+          <span class="mic-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+          </span>
+          LISTENING ACTIVE
+        </div>
       </div>
+
     </div>
+
+    <footer class="hud-footer">
+      <div class="footer-grid">
+        
+        <div class="footer-col">
+          <h3 class="footer-heading">Project Scope</h3>
+          <p class="footer-desc">
+            Webcam-Based Dual-Mode Hand Gesture Interface for Computer Control and Indian Sign Language Expression.
+          </p>
+        </div>
+
+        <div class="footer-col">
+          <h3 class="footer-subheading">Tech Stack</h3>
+          <div class="tech-chips">
+            <span>Python</span>
+            <span>MediaPipe</span>
+            <span>OpenCV</span>
+            <span>Eel</span>
+            <span>HTML/CSS</span>
+          </div>
+        </div>
+
+        <div class="footer-col right-align">
+          
+          <div class="built-with">
+            <span>Built with</span>
+            <svg class="icon-pulse" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>
+            <span>and</span>
+            <svg class="icon-pulse text-rose" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+          </div>
+
+          <div class="credits">
+            <span class="text-muted">Original implementation by</span>
+            <span class="text-bold">Nittaany</span>
+          </div>
+
+          <div class="social-links">
+            <a href="https://github.com/Nittaany" target="_blank" title="GitHub">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+            </a>
+            <a href="http://linkedin.com/in/satyam-c" target="_blank" title="LinkedIn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
+            </a>
+            <a href="mailto:nitantsatyam123@gmail.com" target="_blank" title="Email">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+            </a>
+          </div>
+
+        </div>
+      </div>
+      
+      <div class="footer-bottom">
+        <p>© 2026 · Major Research Project</p>
+        <p class="italic">Built to be understood, not just reused ❗️</p>
+      </div>
+    </footer>
 
   </main>
 
-  <footer class="legal-footer">
-    <p>SECURE CONNECTION • 128-BIT ENCRYPTION • © 2026 STARK INDUSTRIES</p>
-  </footer>
-
-  <script src="js/jquery.js"></script> <script src="js/jquery.convform.js"></script>
+  <script src="js/jquery.js"></script>
+  <script src="js/jquery.convform.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
