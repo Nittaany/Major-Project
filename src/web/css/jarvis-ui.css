@@ -1,0 +1,333 @@
+/* ---------- VARIABLES ---------- */
+:root {
+  --bg-deep: #05050a;
+  --glass-bg: rgba(13, 19, 30, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --primary-cyan: #00f0ff;
+  --primary-glow: rgba(0, 240, 255, 0.4);
+  --text-main: #e0e6ed;
+  --text-muted: #94a3b8;
+  --user-bubble: #1e293b;
+  --bot-bubble: rgba(0, 240, 255, 0.1);
+
+  --font-main: "Inter", sans-serif;
+  --font-tech: "JetBrains Mono", monospace;
+}
+
+/* ---------- RESET & BASE ---------- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-deep);
+  color: var(--text-main);
+  font-family: var(--font-main);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ---------- BACKGROUND FX ---------- */
+.ambient-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(
+    circle,
+    rgba(0, 240, 255, 0.15) 0%,
+    rgba(0, 0, 0, 0) 70%
+  );
+  top: -10%;
+  left: 20%;
+  border-radius: 50%;
+  z-index: 0;
+  animation: float 10s infinite ease-in-out;
+}
+
+.grid-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: linear-gradient(
+      rgba(255, 255, 255, 0.03) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  z-index: 0;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-20px, 30px);
+  }
+}
+
+/* ---------- MAIN INTERFACE CARD ---------- */
+.glass-interface {
+  position: relative;
+  z-index: 10;
+  width: 90%;
+  max-width: 1000px; /* Wider for desktop landing page feel */
+  height: 85vh;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: 24px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---------- HEADER ---------- */
+.hud-header {
+  padding: 20px 30px;
+  border-bottom: 1px solid var(--glass-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.logo-area {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.logo-icon img {
+  width: 40px;
+  height: 40px;
+  filter: drop-shadow(0 0 8px var(--primary-glow));
+}
+
+.logo-text h1 {
+  font-family: var(--font-tech);
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+  color: #fff;
+}
+
+.logo-text .subtitle {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--primary-cyan);
+  letter-spacing: 3px;
+  margin-top: 2px;
+}
+
+.system-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-tech);
+  font-size: 0.75rem;
+  color: var(--primary-cyan);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: rgba(0, 240, 255, 0.05);
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--primary-cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 10px var(--primary-cyan);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ---------- CHAT AREA ---------- */
+.chat-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 240, 255, 0.03),
+    transparent 70%
+  );
+}
+
+.conv-form-wrapper {
+  height: 100%;
+}
+
+#messages {
+  padding: 30px;
+  height: 100% !important;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--glass-border) transparent;
+}
+
+/* CUSTOMIZING THE CONVFORM BUBBLES */
+/* You will likely need to target the generated classes from the plugin. 
+   Usually they are .message.to (user) and .message.from (bot) */
+
+div.conv-form-wrapper div.message {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  border-radius: 12px;
+  padding: 12px 18px;
+  max-width: 75%;
+  margin-bottom: 15px;
+  animation: slideIn 0.3s ease-out forwards;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+@keyframes slideIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* User Message */
+div.conv-form-wrapper div.message.to {
+  background-color: var(--user-bubble);
+  color: #fff;
+  float: right;
+  border-bottom-right-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Bot Message */
+div.conv-form-wrapper div.message.from {
+  background-color: var(--bot-bubble);
+  color: var(--primary-cyan);
+  float: left;
+  border-bottom-left-radius: 2px;
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.05);
+}
+
+/* ---------- INPUT AREA ---------- */
+.hud-footer {
+  padding: 20px 30px;
+  background: rgba(0, 0, 0, 0.3);
+  border-top: 1px solid var(--glass-border);
+}
+
+.input-group {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 8px 8px 20px;
+  border-radius: 50px;
+  border: 1px solid var(--glass-border);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+
+.input-group:focus-within {
+  border-color: var(--primary-cyan);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.15);
+}
+
+#userInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  font-family: var(--font-main);
+  outline: none;
+}
+
+#userInput::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+  font-family: var(--font-tech);
+}
+
+.submit-btn {
+  background: var(--primary-cyan);
+  border: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  color: #000;
+}
+
+.submit-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px var(--primary-cyan);
+}
+
+.submit-btn svg {
+  width: 20px;
+  height: 20px;
+  margin-left: 2px; /* Visual optical alignment */
+}
+
+/* ---------- FOOTER ---------- */
+.legal-footer {
+  position: absolute;
+  bottom: 15px;
+  font-family: var(--font-tech);
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.2);
+  letter-spacing: 1px;
+  z-index: 5;
+}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 768px) {
+  .glass-interface {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+    border: none;
+  }
+
+  .hud-header {
+    padding: 15px 20px;
+  }
+
+  .logo-text h1 {
+    font-size: 1rem;
+  }
+  .system-status {
+    display: none;
+  } /* Hide status on small screens */
+}

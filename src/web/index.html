@@ -1,42 +1,72 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Proton</title>
-    <script type="text/javascript" src="/eel.js"></script>
-    <link rel="stylesheet" type="text/css" href="css/jquery.convform.css">
+  <meta charset="UTF-8" />
+  <title>J.A.R.V.I.S | Neural Interface</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <script type="text/javascript" src="/eel.js"></script>
+  
+  <link rel="stylesheet" href="css/jquery.convform.css" />
+  <link rel="stylesheet" href="css/jarvis-ui.css" />
 </head>
+
 <body>
-    <!-- header -->
-    <header>
-        <div class = "header-wrapper">
-          <p class="awesome">PROTON Welcomes you!</p>
-            <div class = "logo">
-                <img src= "images/icon.png"  width="35" height="33">
-            </div>
+
+  <div class="ambient-glow"></div>
+  <div class="grid-overlay"></div>
+
+  <main class="glass-interface">
+    
+    <header class="hud-header">
+      <div class="logo-area">
+        <div class="logo-icon">
+          <img src="images/icon.png" alt="AI Core">
         </div>
+        <div class="logo-text">
+          <h1>J.A.R.V.I.S</h1>
+          <span class="subtitle">NEURAL LINK V.2.0</span>
+        </div>
+      </div>
+      
+      <div class="system-status">
+        <span class="pulse-dot"></span>
+        <span class="status-text">SYSTEM ONLINE</span>
+      </div>
     </header>
-    <!-- ChatBot -->
-    <div class="chat_icon">
-        <i class="fa fa-comments" aria-hidden="true"></i>
+
+    <div class="chat-viewport">
+      <div class="conv-form-wrapper">
+        <div id="messages"></div>
+      </div>
     </div>
 
-    <div class="chat_box">
-        
-            <div class="conv-form-wrapper" style="height:auto;">
-                <div id="messages" style="overflow-y:auto;height:400px;">
-                    </br></br>                    
-                </div>
-            </div>
-            
-            <div id="convForm" class="convFormDynamic" style="height:50px;position:absolute;left:10px;bottom:0px;margin:5px;">
-                <div class="options dragscroll"></div>
-                <input type="text" id="userInput" placeholder="Type Here" class="userInputDynamic" style="margin: 7px 7.575px 7px 10px; width: 219px; height: 24px;">
-                <button id="userInputButton" type="button" class="submit" style="margin-top:9px">▶</button>
-                <span class="clear"></span>
-            </div>
+    <div id="convForm" class="convFormDynamic hud-footer">
+      <div class="options dragscroll"></div>
+      
+      <div class="input-group">
+        <input
+          type="text"
+          id="userInput"
+          class="userInputDynamic"
+          placeholder="Awaiting command..."
+          autocomplete="off"
+        />
+        <button id="userInputButton" type="button" class="submit-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+      </div>
+    </div>
 
-        </div>
-    
+  </main>
+
+  <footer class="legal-footer">
+    <p>SECURE CONNECTION • 128-BIT ENCRYPTION • © 2026 STARK INDUSTRIES</p>
+  </footer>
+
+  <script src="js/jquery.js"></script> <script src="js/jquery.convform.js"></script>
+  <script src="js/main.js"></script>
 </body>
-    <script type="text/javascript" src="js/main.js"></script>
 </html>
