@@ -47,3 +47,51 @@ function getUserInput() {
         eel.getUserInput(msg);
     }
 }
+
+// Existing Input Listeners
+document.getElementById("userInputButton").addEventListener("click", getUserInput, false);
+document.getElementById("userInput").addEventListener("keyup", function (event) {
+    if (event.keyCode === 13) { getUserInput(); }
+});
+
+// EEL EXPOSED FUNCTIONS
+eel.expose(addUserMsg);
+function addUserMsg(msg) {
+    let element = document.getElementById("messages");
+    element.innerHTML += '<div class="message from">' + msg + '</div>';
+    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+}
+
+eel.expose(addAppMsg);
+function addAppMsg(msg) {
+    let element = document.getElementById("messages");
+    element.innerHTML += '<div class="message to">' + msg + '</div>';
+    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+}
+
+eel.expose(updateStatus);
+function updateStatus(status) {
+    document.getElementById("status-label").innerText = status;
+}
+
+eel.expose(updateStats);
+function updateStats(cpu, ram) {
+    document.getElementById("cpu-val").innerText = cpu;
+    document.getElementById("ram-val").innerText = ram;
+}
+
+eel.expose(toggleVoiceWave);
+function toggleVoiceWave(show) {
+    let wave = document.getElementById("voice-wave-container");
+    wave.style.opacity = show ? "1" : "0.2";
+    wave.style.filter = show ? "none" : "grayscale(1)";
+}
+
+function getUserInput() {
+    let element = document.getElementById("userInput");
+    let msg = element.value;
+    if (msg.length != 0) {
+        element.value = "";
+        eel.getUserInput(msg);
+    }
+}

@@ -1,0 +1,23 @@
+# --- Core Vision & UI ---
+opencv-python
+mediapipe
+pyautogui
+screen-brightness-control
+pynput
+Eel
+
+# --- AI & Data Processing ---
+numpy
+tqdm
+scikit-learn
+
+# --- Voice & Audio (Jarvis) ---
+pyttsx3
+SpeechRecognition
+pyaudio
+wikipedia
+
+# --- Apple Silicon AI Engine ---
+# Note: On macOS M1/M2/M3, tensorflow usually works fine now.
+# If it fails, you can switch to tflite-runtime.
+tensorflow
