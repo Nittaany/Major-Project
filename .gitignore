@@ -58,3 +58,7 @@ models/experiments/
 # --- Logs & VS Code ---
 *.log
 .vscode/
+
+#files:
+src/Gesture_Controller copy.py
+models/production/ISL_Model-0.tflite

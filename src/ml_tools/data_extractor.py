@@ -5,7 +5,8 @@ import mediapipe as mp
 from tqdm import tqdm
 
 # --- CONFIGURATION ---
-DATA_PATH = "data/raw/ProcessedData_vivit" 
+# Pointing to your new CLEAN dataset
+DATA_PATH = "data/raw/INCLUDE50" 
 OUTPUT_PATH = "data/processed"
 TARGET_FRAMES = 30
 
@@ -40,15 +41,15 @@ def resize_sequence(sequence, target_length):
         res[:, j] = np.interp(np.linspace(0, sequence.shape[0], target_length), np.arange(sequence.shape[0]), sequence[:, j])
     return res
 
-def find_video_files(directory):
-    """Recursively find all video files in a directory (Case Insensitive)"""
-    video_extensions = ('.mov', '.mp4', '.avi', '.mkv', '.webm')
-    found_files = []
-    for root, dirs, files in os.walk(directory):
-        for file in files:
-            if file.lower().endswith(video_extensions):
-                found_files.append(os.path.join(root, file))
-    return found_files
+def clean_folder_name(folder_name):
+    """
+    Converts '1. loud' -> 'loud', '10. Mean' -> 'mean'
+    """
+    if '.' in folder_name:
+        name = folder_name.split('.', 1)[-1].strip()
+    else:
+        name = folder_name
+    return name.lower()
 
 def process_videos():
     if not os.path.exists(DATA_PATH):
@@ -57,33 +58,49 @@ def process_videos():
     if not os.path.exists(OUTPUT_PATH):
         os.makedirs(OUTPUT_PATH)
 
-    # Get Classes
-    actions = [d for d in os.listdir(DATA_PATH) if os.path.isdir(os.path.join(DATA_PATH, d)) and not d.startswith('.')]
-    actions.sort()
-    
     sequences = []
     labels = []
-    label_map = {label: num for num, label in enumerate(actions)}
+    classes_found = set()
     
-    print(f"[INFO] Found {len(actions)} classes. Starting Deep Scan...")
+    print(f"[INFO] Scanning {DATA_PATH}...")
+    
+    # 1. First Pass: Identify all Unique Classes
+    for root, dirs, files in os.walk(DATA_PATH):
+        for d in dirs:
+            # We assume the leaf folders (containing videos) are the classes
+            # But the structure is Category/1. Word.
+            # So we check if the folder starts with a digit like "1. " or just look at all lowest level folders
+            pass 
+
+    # We will build the label map dynamically as we process
+    label_map = {}
+    current_label_id = 0
 
     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
         
-        # Loop over actions
-        for action in tqdm(actions, desc="Processing"):
-            class_path = os.path.join(DATA_PATH, action)
+        # Deep walk
+        for root, dirs, files in os.walk(DATA_PATH):
+            video_files = [f for f in files if f.lower().endswith(('.mov', '.mp4'))]
             
-            # UPGRADE: Recursive search for videos
-            video_paths = find_video_files(class_path)
-            
-            # DEBUG: Print warning if a class is empty
-            if not video_paths:
-                # tqdm.write(f"[WARNING] No videos found in {action}!") 
+            if not video_files:
                 continue
 
-            for video_path in video_paths:
+            # If we found videos, this folder is a Class
+            folder_name = os.path.basename(root)
+            clean_name = clean_folder_name(folder_name)
+            
+            # Add to label map if new
+            if clean_name not in label_map:
+                label_map[clean_name] = current_label_id
+                current_label_id += 1
+                tqdm.write(f"[NEW CLASS] Found '{clean_name}' (ID: {label_map[clean_name]})")
+
+            # Process Videos
+            for video_file in tqdm(video_files, desc=f"Processing {clean_name}", leave=False):
+                video_path = os.path.join(root, video_file)
                 cap = cv2.VideoCapture(video_path)
                 temp_sequence = []
+                
                 while cap.isOpened():
                     ret, frame = cap.read()
                     if not ret: break
@@ -92,25 +109,27 @@ def process_videos():
                     temp_sequence.append(extract_keypoints(results))
                 cap.release()
                 
-                if len(temp_sequence) > 5:
+                if len(temp_sequence) > 10:
                     sequences.append(resize_sequence(temp_sequence, TARGET_FRAMES))
-                    labels.append(label_map[action])
+                    labels.append(label_map[clean_name])
 
     print("\n[INFO] Finalizing...")
     X = np.array(sequences)
     y = np.array(labels)
     
     if X.shape[0] == 0:
-        print("\n[FATAL ERROR] Still found 0 videos. Please check your folder structure manually.")
-        print(f"Script looked inside: {DATA_PATH}/[class_name]/")
-        print("And looked for: .mov, .mp4, .avi (case insensitive)")
+        print("[ERROR] No data extracted.")
     else:
         print(f"SUCCESS! Extracted {X.shape[0]} videos.")
+        print(f"Classes Found: {len(label_map)}")
         print(f"X Shape: {X.shape}") 
         print(f"y Shape: {y.shape}")
+        
+        # Save
         np.save(os.path.join(OUTPUT_PATH, "X.npy"), X)
         np.save(os.path.join(OUTPUT_PATH, "y.npy"), y)
         np.save(os.path.join(OUTPUT_PATH, "labels.npy"), label_map)
+        print(f"Data saved to {OUTPUT_PATH}")
 
 if __name__ == "__main__":
     process_videos()
