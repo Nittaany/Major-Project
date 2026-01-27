@@ -1,8 +1,1482 @@
+# # Imports
+
+# import cv2
+# import mediapipe as mp
+# import pyautogui
+# import math
+# from enum import IntEnum
+# from ctypes import cast, POINTER
+# from comtypes import CLSCTX_ALL
+# from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+# from google.protobuf.json_format import MessageToDict
+# import screen_brightness_control as sbcontrol
+
+# pyautogui.FAILSAFE = False
+# mp_drawing = mp.solutions.drawing_utils
+# mp_hands = mp.solutions.hands
+
+# # Gesture Encodings 
+# class Gest(IntEnum):
+#     # Binary Encoded
+#     """
+#     Enum for mapping all hand gesture to binary number.
+#     """
+
+#     FIST = 0
+#     PINKY = 1
+#     RING = 2
+#     MID = 4
+#     LAST3 = 7
+#     INDEX = 8
+#     FIRST2 = 12
+#     LAST4 = 15
+#     THUMB = 16    
+#     PALM = 31
+    
+#     # Extra Mappings
+#     V_GEST = 33
+#     TWO_FINGER_CLOSED = 34
+#     PINCH_MAJOR = 35
+#     PINCH_MINOR = 36
+
+# # Multi-handedness Labels
+# class HLabel(IntEnum):
+#     MINOR = 0
+#     MAJOR = 1
+
+# # Convert Mediapipe Landmarks to recognizable Gestures
+# class HandRecog:
+#     """
+#     Convert Mediapipe Landmarks to recognizable Gestures.
+#     """
+    
+#     def __init__(self, hand_label):
+#         """
+#         Constructs all the necessary attributes for the HandRecog object.
+
+        # Parameters
+        # ----------
+        #     finger : int
+        #         Represent gesture corresponding to Enum 'Gest',
+        #         stores computed gesture for current frame.
+        #     ori_gesture : int
+        #         Represent gesture corresponding to Enum 'Gest',
+        #         stores gesture being used.
+#             prev_gesture : int
+#                 Represent gesture corresponding to Enum 'Gest',
+#                 stores gesture computed for previous frame.
+#             frame_count : int
+#                 total no. of frames since 'ori_gesture' is updated.
+#             hand_result : Object
+#                 Landmarks obtained from mediapipe.
+#             hand_label : int
+#                 Represents multi-handedness corresponding to Enum 'HLabel'.
+#         """
+
+#         self.finger = 0
+#         self.ori_gesture = Gest.PALM
+#         self.prev_gesture = Gest.PALM
+#         self.frame_count = 0
+#         self.hand_result = None
+#         self.hand_label = hand_label
+    
+#     def update_hand_result(self, hand_result):
+#         self.hand_result = hand_result
+
+#     def get_signed_dist(self, point):
+#         """
+#         returns signed euclidean distance between 'point'.
+
+#         Parameters
+#         ----------
+#         point : list contaning two elements of type list/tuple which represents 
+#             landmark point.
+        
+#         Returns
+#         -------
+#         float
+#         """
+#         sign = -1
+#         if self.hand_result.landmark[point[0]].y < self.hand_result.landmark[point[1]].y:
+#             sign = 1
+#         dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
+#         dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
+#         dist = math.sqrt(dist)
+#         return dist*sign
+    
+#     def get_dist(self, point):
+#         """
+#         returns euclidean distance between 'point'.
+
+#         Parameters
+#         ----------
+#         point : list contaning two elements of type list/tuple which represents 
+#             landmark point.
+        
+#         Returns
+#         -------
+#         float
+#         """
+#         dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
+#         dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
+#         dist = math.sqrt(dist)
+#         return dist
+    
+#     def get_dz(self,point):
+#         """
+#         returns absolute difference on z-axis between 'point'.
+
+#         Parameters
+#         ----------
+#         point : list contaning two elements of type list/tuple which represents 
+#             landmark point.
+        
+#         Returns
+#         -------
+#         float
+#         """
+#         return abs(self.hand_result.landmark[point[0]].z - self.hand_result.landmark[point[1]].z)
+    
+#     # Function to find Gesture Encoding using current finger_state.
+#     # Finger_state: 1 if finger is open, else 0
+#     def set_finger_state(self):
+#         """
+#         set 'finger' by computing ratio of distance between finger tip 
+#         , middle knuckle, base knuckle.
+
+#         Returns
+#         -------
+#         None
+#         """
+#         if self.hand_result == None:
+#             return
+
+#         points = [[8,5,0],[12,9,0],[16,13,0],[20,17,0]]
+#         self.finger = 0
+#         self.finger = self.finger | 0 #thumb
+#         for idx,point in enumerate(points):
+            
+#             dist = self.get_signed_dist(point[:2])
+#             dist2 = self.get_signed_dist(point[1:])
+            
+#             try:
+#                 ratio = round(dist/dist2,1)
+#             except:
+#                 ratio = round(dist1/0.01,1)
+
+#             self.finger = self.finger << 1
+#             if ratio > 0.5 :
+#                 self.finger = self.finger | 1
+    
+
+#     # Handling Fluctations due to noise
+#     def get_gesture(self):
+#         """
+#         returns int representing gesture corresponding to Enum 'Gest'.
+#         sets 'frame_count', 'ori_gesture', 'prev_gesture', 
+#         handles fluctations due to noise.
+        
+#         Returns
+#         -------
+#         int
+#         """
+#         if self.hand_result == None:
+#             return Gest.PALM
+
+#         current_gesture = Gest.PALM
+#         if self.finger in [Gest.LAST3,Gest.LAST4] and self.get_dist([8,4]) < 0.05:
+#             if self.hand_label == HLabel.MINOR :
+#                 current_gesture = Gest.PINCH_MINOR
+#             else:
+#                 current_gesture = Gest.PINCH_MAJOR
+
+#         elif Gest.FIRST2 == self.finger :
+#             point = [[8,12],[5,9]]
+#             dist1 = self.get_dist(point[0])
+#             dist2 = self.get_dist(point[1])
+#             ratio = dist1/dist2
+#             if ratio > 1.7:
+#                 current_gesture = Gest.V_GEST
+#             else:
+#                 if self.get_dz([8,12]) < 0.1:
+#                     current_gesture =  Gest.TWO_FINGER_CLOSED
+#                 else:
+#                     current_gesture =  Gest.MID
+            
+#         else:
+#             current_gesture =  self.finger
+        
+#         if current_gesture == self.prev_gesture:
+#             self.frame_count += 1
+#         else:
+#             self.frame_count = 0
+
+#         self.prev_gesture = current_gesture
+
+#         if self.frame_count > 4 :
+#             self.ori_gesture = current_gesture
+#         return self.ori_gesture
+
+# # Executes commands according to detected gestures
+# class Controller:
+#     """
+#     Executes commands according to detected gestures.
+
+#     Attributes
+#     ----------
+#     tx_old : int
+#         previous mouse location x coordinate
+#     ty_old : int
+#         previous mouse location y coordinate
+#     flag : bool
+#         true if V gesture is detected
+#     grabflag : bool
+#         true if FIST gesture is detected
+#     pinchmajorflag : bool
+#         true if PINCH gesture is detected through MAJOR hand,
+#         on x-axis 'Controller.changesystembrightness', 
+#         on y-axis 'Controller.changesystemvolume'.
+#     pinchminorflag : bool
+#         true if PINCH gesture is detected through MINOR hand,
+#         on x-axis 'Controller.scrollHorizontal', 
+#         on y-axis 'Controller.scrollVertical'.
+#     pinchstartxcoord : int
+#         x coordinate of hand landmark when pinch gesture is started.
+#     pinchstartycoord : int
+#         y coordinate of hand landmark when pinch gesture is started.
+#     pinchdirectionflag : bool
+#         true if pinch gesture movment is along x-axis,
+#         otherwise false
+#     prevpinchlv : int
+#         stores quantized magnitued of prev pinch gesture displacment, from 
+#         starting position
+#     pinchlv : int
+#         stores quantized magnitued of pinch gesture displacment, from 
+#         starting position
+#     framecount : int
+#         stores no. of frames since 'pinchlv' is updated.
+#     prev_hand : tuple
+#         stores (x, y) coordinates of hand in previous frame.
+#     pinch_threshold : float
+#         step size for quantization of 'pinchlv'.
+#     """
+
+#     tx_old = 0
+#     ty_old = 0
+#     trial = True
+#     flag = False
+#     grabflag = False
+#     pinchmajorflag = False
+#     pinchminorflag = False
+#     pinchstartxcoord = None
+#     pinchstartycoord = None
+#     pinchdirectionflag = None
+#     prevpinchlv = 0
+#     pinchlv = 0
+#     framecount = 0
+#     prev_hand = None
+#     pinch_threshold = 0.3
+    
+#     def getpinchylv(hand_result):
+#         """returns distance beween starting pinch y coord and current hand position y coord."""
+#         dist = round((Controller.pinchstartycoord - hand_result.landmark[8].y)*10,1)
+#         return dist
+
+#     def getpinchxlv(hand_result):
+#         """returns distance beween starting pinch x coord and current hand position x coord."""
+#         dist = round((hand_result.landmark[8].x - Controller.pinchstartxcoord)*10,1)
+#         return dist
+    
+#     def changesystembrightness():
+#         """sets system brightness based on 'Controller.pinchlv'."""
+#         currentBrightnessLv = sbcontrol.get_brightness(display=0)/100.0
+#         currentBrightnessLv += Controller.pinchlv/50.0
+#         if currentBrightnessLv > 1.0:
+#             currentBrightnessLv = 1.0
+#         elif currentBrightnessLv < 0.0:
+#             currentBrightnessLv = 0.0       
+#         sbcontrol.fade_brightness(int(100*currentBrightnessLv) , start = sbcontrol.get_brightness(display=0))
+    
+#     def changesystemvolume():
+#         """sets system volume based on 'Controller.pinchlv'."""
+#         devices = AudioUtilities.GetSpeakers()
+#         interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+#         volume = cast(interface, POINTER(IAudioEndpointVolume))
+#         currentVolumeLv = volume.GetMasterVolumeLevelScalar()
+#         currentVolumeLv += Controller.pinchlv/50.0
+#         if currentVolumeLv > 1.0:
+#             currentVolumeLv = 1.0
+#         elif currentVolumeLv < 0.0:
+#             currentVolumeLv = 0.0
+#         volume.SetMasterVolumeLevelScalar(currentVolumeLv, None)
+    
+#     def scrollVertical():
+#         """scrolls on screen vertically."""
+#         pyautogui.scroll(120 if Controller.pinchlv>0.0 else -120)
+        
+    
+#     def scrollHorizontal():
+#         """scrolls on screen horizontally."""
+#         pyautogui.keyDown('shift')
+#         pyautogui.keyDown('ctrl')
+#         pyautogui.scroll(-120 if Controller.pinchlv>0.0 else 120)
+#         pyautogui.keyUp('ctrl')
+#         pyautogui.keyUp('shift')
+
+#     # Locate Hand to get Cursor Position
+#     # Stabilize cursor by Dampening
+#     def get_position(hand_result):
+#         """
+#         returns coordinates of current hand position.
+
+#         Locates hand to get cursor position also stabilize cursor by 
+#         dampening jerky motion of hand.
+
+#         Returns
+#         -------
+#         tuple(float, float)
+#         """
+#         point = 9
+#         position = [hand_result.landmark[point].x ,hand_result.landmark[point].y]
+#         sx,sy = pyautogui.size()
+#         x_old,y_old = pyautogui.position()
+#         x = int(position[0]*sx)
+#         y = int(position[1]*sy)
+#         if Controller.prev_hand is None:
+#             Controller.prev_hand = x,y
+#         delta_x = x - Controller.prev_hand[0]
+#         delta_y = y - Controller.prev_hand[1]
+
+#         distsq = delta_x**2 + delta_y**2
+#         ratio = 1
+#         Controller.prev_hand = [x,y]
+
+#         if distsq <= 25:
+#             ratio = 0
+#         elif distsq <= 900:
+#             ratio = 0.07 * (distsq ** (1/2))
+#         else:
+#             ratio = 2.1
+#         x , y = x_old + delta_x*ratio , y_old + delta_y*ratio
+#         return (x,y)
+
+#     def pinch_control_init(hand_result):
+#         """Initializes attributes for pinch gesture."""
+#         Controller.pinchstartxcoord = hand_result.landmark[8].x
+#         Controller.pinchstartycoord = hand_result.landmark[8].y
+#         Controller.pinchlv = 0
+#         Controller.prevpinchlv = 0
+#         Controller.framecount = 0
+
+#     # Hold final position for 5 frames to change status
+#     def pinch_control(hand_result, controlHorizontal, controlVertical):
+#         """
+#         calls 'controlHorizontal' or 'controlVertical' based on pinch flags, 
+#         'framecount' and sets 'pinchlv'.
+
+#         Parameters
+#         ----------
+#         hand_result : Object
+#             Landmarks obtained from mediapipe.
+#         controlHorizontal : callback function assosiated with horizontal
+#             pinch gesture.
+#         controlVertical : callback function assosiated with vertical
+#             pinch gesture. 
+        
+#         Returns
+#         -------
+#         None
+#         """
+#         if Controller.framecount == 5:
+#             Controller.framecount = 0
+#             Controller.pinchlv = Controller.prevpinchlv
+
+#             if Controller.pinchdirectionflag == True:
+#                 controlHorizontal() #x
+
+#             elif Controller.pinchdirectionflag == False:
+#                 controlVertical() #y
+
+#         lvx =  Controller.getpinchxlv(hand_result)
+#         lvy =  Controller.getpinchylv(hand_result)
+            
+#         if abs(lvy) > abs(lvx) and abs(lvy) > Controller.pinch_threshold:
+#             Controller.pinchdirectionflag = False
+#             if abs(Controller.prevpinchlv - lvy) < Controller.pinch_threshold:
+#                 Controller.framecount += 1
+#             else:
+#                 Controller.prevpinchlv = lvy
+#                 Controller.framecount = 0
+
+#         elif abs(lvx) > Controller.pinch_threshold:
+#             Controller.pinchdirectionflag = True
+#             if abs(Controller.prevpinchlv - lvx) < Controller.pinch_threshold:
+#                 Controller.framecount += 1
+#             else:
+#                 Controller.prevpinchlv = lvx
+#                 Controller.framecount = 0
+
+#     def handle_controls(gesture, hand_result):  
+#         """Impliments all gesture functionality."""      
+#         x,y = None,None
+#         if gesture != Gest.PALM :
+#             x,y = Controller.get_position(hand_result)
+        
+#         # flag reset
+#         if gesture != Gest.FIST and Controller.grabflag:
+#             Controller.grabflag = False
+#             pyautogui.mouseUp(button = "left")
+
+#         if gesture != Gest.PINCH_MAJOR and Controller.pinchmajorflag:
+#             Controller.pinchmajorflag = False
+
+#         if gesture != Gest.PINCH_MINOR and Controller.pinchminorflag:
+#             Controller.pinchminorflag = False
+
+#         # implementation
+#         if gesture == Gest.V_GEST:
+#             Controller.flag = True
+#             pyautogui.moveTo(x, y, duration = 0.1)
+
+#         elif gesture == Gest.FIST:
+#             if not Controller.grabflag : 
+#                 Controller.grabflag = True
+#                 pyautogui.mouseDown(button = "left")
+#             pyautogui.moveTo(x, y, duration = 0.1)
+
+#         elif gesture == Gest.MID and Controller.flag:
+#             pyautogui.click()
+#             Controller.flag = False
+
+#         elif gesture == Gest.INDEX and Controller.flag:
+#             pyautogui.click(button='right')
+#             Controller.flag = False
+
+#         elif gesture == Gest.TWO_FINGER_CLOSED and Controller.flag:
+#             pyautogui.doubleClick()
+#             Controller.flag = False
+
+#         elif gesture == Gest.PINCH_MINOR:
+#             if Controller.pinchminorflag == False:
+#                 Controller.pinch_control_init(hand_result)
+#                 Controller.pinchminorflag = True
+#             Controller.pinch_control(hand_result,Controller.scrollHorizontal, Controller.scrollVertical)
+        
+#         elif gesture == Gest.PINCH_MAJOR:
+#             if Controller.pinchmajorflag == False:
+#                 Controller.pinch_control_init(hand_result)
+#                 Controller.pinchmajorflag = True
+#             Controller.pinch_control(hand_result,Controller.changesystembrightness, Controller.changesystemvolume)
+        
+# '''
+# ----------------------------------------  Main Class  ----------------------------------------
+#     Entry point of Gesture Controller
+# '''
+
+
+# class GestureController:
+#     """
+#     Handles camera, obtain landmarks from mediapipe, entry point
+#     for whole program.
+
+#     Attributes
+#     ----------
+#     gc_mode : int
+#         indicates weather gesture controller is running or not,
+#         1 if running, otherwise 0.
+#     cap : Object
+#         object obtained from cv2, for capturing video frame.
+#     CAM_HEIGHT : int
+#         highet in pixels of obtained frame from camera.
+#     CAM_WIDTH : int
+#         width in pixels of obtained frame from camera.
+#     hr_major : Object of 'HandRecog'
+#         object representing major hand.
+#     hr_minor : Object of 'HandRecog'
+#         object representing minor hand.
+#     dom_hand : bool
+#         True if right hand is domaniant hand, otherwise False.
+#         default True.
+#     """
+#     gc_mode = 0
+#     cap = None
+#     CAM_HEIGHT = None
+#     CAM_WIDTH = None
+#     hr_major = None # Right Hand by default
+#     hr_minor = None # Left hand by default
+#     dom_hand = True
+
+#     def __init__(self):
+#         """Initilaizes attributes."""
+#         GestureController.gc_mode = 1
+#         GestureController.cap = cv2.VideoCapture(0)
+#         GestureController.CAM_HEIGHT = GestureController.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+#         GestureController.CAM_WIDTH = GestureController.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    
+#     def classify_hands(results):
+#         """
+#         sets 'hr_major', 'hr_minor' based on classification(left, right) of 
+#         hand obtained from mediapipe, uses 'dom_hand' to decide major and
+#         minor hand.
+#         """
+#         left , right = None,None
+#         try:
+#             handedness_dict = MessageToDict(results.multi_handedness[0])
+#             if handedness_dict['classification'][0]['label'] == 'Right':
+#                 right = results.multi_hand_landmarks[0]
+#             else :
+#                 left = results.multi_hand_landmarks[0]
+#         except:
+#             pass
+
+#         try:
+#             handedness_dict = MessageToDict(results.multi_handedness[1])
+#             if handedness_dict['classification'][0]['label'] == 'Right':
+#                 right = results.multi_hand_landmarks[1]
+#             else :
+#                 left = results.multi_hand_landmarks[1]
+#         except:
+#             pass
+        
+#         if GestureController.dom_hand == True:
+#             GestureController.hr_major = right
+#             GestureController.hr_minor = left
+#         else :
+#             GestureController.hr_major = left
+#             GestureController.hr_minor = right
+
+#     def start(self):
+#         """
+#         Entry point of whole programm, caputres video frame and passes, obtains
+#         landmark from mediapipe and passes it to 'handmajor' and 'handminor' for
+#         controlling.
+#         """
+        
+#         handmajor = HandRecog(HLabel.MAJOR)
+#         handminor = HandRecog(HLabel.MINOR)
+
+#         with mp_hands.Hands(max_num_hands = 2,min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
+#             while GestureController.cap.isOpened() and GestureController.gc_mode:
+#                 success, image = GestureController.cap.read()
+
+#                 if not success:
+#                     print("Ignoring empty camera frame.")
+#                     continue
+                
+#                 image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+#                 image.flags.writeable = False
+#                 results = hands.process(image)
+                
+#                 image.flags.writeable = True
+#                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+#                 if results.multi_hand_landmarks:                   
+#                     GestureController.classify_hands(results)
+#                     handmajor.update_hand_result(GestureController.hr_major)
+#                     handminor.update_hand_result(GestureController.hr_minor)
+
+#                     handmajor.set_finger_state()
+#                     handminor.set_finger_state()
+#                     gest_name = handminor.get_gesture()
+
+#                     if gest_name == Gest.PINCH_MINOR:
+#                         Controller.handle_controls(gest_name, handminor.hand_result)
+#                     else:
+#                         gest_name = handmajor.get_gesture()
+#                         Controller.handle_controls(gest_name, handmajor.hand_result)
+                    
+#                     for hand_landmarks in results.multi_hand_landmarks:
+#                         mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+#                 else:
+#                     Controller.prev_hand = None
+#                 cv2.imshow('Gesture Controller', image)
+#                 if cv2.waitKey(5) & 0xFF == 13:
+#                     break
+#         GestureController.cap.release()
+#         cv2.destroyAllWindows()
+
+# # uncomment to run directly
+# # gc1 = GestureController()
+# # gc1.start()
+
+
+'''
+import cv2
+import mediapipe as mp
+import pyautogui
+import math
+import platform
+import os
+import subprocess
+from enum import IntEnum
+import screen_brightness_control as sbcontrol
+
+# --- MACOS PATCH: Mock Windows Audio Libraries ---
+IS_MACOS = platform.system() == "Darwin"
+
+if not IS_MACOS:
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+# -------------------------------------------------
+
+pyautogui.FAILSAFE = False
+# SAFETY: Use the safe import for mediapipe solutions
+mp_drawing = mp.solutions.drawing_utils
+mp_hands = mp.solutions.hands
+
+class Gest(IntEnum):
+    FIST = 0
+    PINKY = 1
+    RING = 2
+    MID = 4
+    LAST3 = 7
+    INDEX = 8
+    FIRST2 = 12
+    LAST4 = 15
+    THUMB = 16    
+    PALM = 31
+    V_GEST = 33
+    TWO_FINGER_CLOSED = 34
+    PINCH_MAJOR = 35
+    PINCH_MINOR = 36
+
+class HLabel(IntEnum):
+    MINOR = 0
+    MAJOR = 1
+
+class HandRecog:
+    def __init__(self, hand_label):
+        self.finger = 0
+        self.ori_gesture = Gest.PALM
+        self.prev_gesture = Gest.PALM
+        self.frame_count = 0
+        self.hand_result = None
+        self.hand_label = hand_label
+    
+    def update_hand_result(self, hand_result):
+        self.hand_result = hand_result
+
+    def get_signed_dist(self, point):
+        sign = -1
+        if self.hand_result.landmark[point[0]].y < self.hand_result.landmark[point[1]].y:
+            sign = 1
+        dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
+        dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
+        dist = math.sqrt(dist)
+        return dist*sign
+    
+    def get_dist(self, point):
+        dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
+        dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
+        dist = math.sqrt(dist)
+        return dist
+    
+    def get_dz(self,point):
+        return abs(self.hand_result.landmark[point[0]].z - self.hand_result.landmark[point[1]].z)
+    
+    def set_finger_state(self):
+        if self.hand_result == None:
+            return
+        points = [[8,5,0],[12,9,0],[16,13,0],[20,17,0]]
+        self.finger = 0
+        self.finger = self.finger | 0 
+        for idx,point in enumerate(points):
+            dist = self.get_signed_dist(point[:2])
+            dist2 = self.get_signed_dist(point[1:])
+            try:
+                ratio = round(dist/dist2,1)
+            except:
+                ratio = round(dist/0.01,1)
+            self.finger = self.finger << 1
+            if ratio > 0.5 :
+                self.finger = self.finger | 1
+    
+    def get_gesture(self):
+        if self.hand_result == None:
+            return Gest.PALM
+        current_gesture = Gest.PALM
+        if self.finger in [Gest.LAST3,Gest.LAST4] and self.get_dist([8,4]) < 0.05:
+            if self.hand_label == HLabel.MINOR :
+                current_gesture = Gest.PINCH_MINOR
+            else:
+                current_gesture = Gest.PINCH_MAJOR
+        elif Gest.FIRST2 == self.finger :
+            point = [[8,12],[5,9]]
+            dist1 = self.get_dist(point[0])
+            dist2 = self.get_dist(point[1])
+            ratio = dist1/dist2
+            if ratio > 1.7:
+                current_gesture = Gest.V_GEST
+            else:
+                if self.get_dz([8,12]) < 0.1:
+                    current_gesture =  Gest.TWO_FINGER_CLOSED
+                else:
+                    current_gesture =  Gest.MID
+        else:
+            current_gesture =  self.finger
+        
+        if current_gesture == self.prev_gesture:
+            self.frame_count += 1
+        else:
+            self.frame_count = 0
+        self.prev_gesture = current_gesture
+        if self.frame_count > 4 :
+            self.ori_gesture = current_gesture
+        return self.ori_gesture
+
+class Controller:
+    tx_old = 0
+    ty_old = 0
+    trial = True
+    flag = False
+    grabflag = False
+    pinchmajorflag = False
+    pinchminorflag = False
+    pinchstartxcoord = None
+    pinchstartycoord = None
+    pinchdirectionflag = None
+    prevpinchlv = 0
+    pinchlv = 0
+    framecount = 0
+    prev_hand = None
+    pinch_threshold = 0.3
+    
+    def getpinchylv(hand_result):
+        dist = round((Controller.pinchstartycoord - hand_result.landmark[8].y)*10,1)
+        return dist
+
+    def getpinchxlv(hand_result):
+        dist = round((hand_result.landmark[8].x - Controller.pinchstartxcoord)*10,1)
+        return dist
+    
+    def changesystembrightness():
+        try:
+            current = sbcontrol.get_brightness()
+            if isinstance(current, list): current = current[0]
+            current = current / 100.0
+        except:
+            current = 0.5 
+
+        new_level = current + (Controller.pinchlv / 50.0)
+        new_level = max(0.0, min(1.0, new_level))
+        
+        if IS_MACOS:
+            os.system(f"brightness {new_level}")
+        else:
+            sbcontrol.fade_brightness(int(100*new_level))
+    
+    def changesystemvolume():
+        vol_change = Controller.pinchlv / 50.0 
+        
+        if IS_MACOS:
+            try:
+                cmd = "osascript -e 'output volume of (get volume settings)'"
+                current_vol = int(subprocess.check_output(cmd, shell=True).strip())
+                new_vol = int(current_vol + (vol_change * 100))
+                new_vol = max(0, min(100, new_vol))
+                os.system(f"osascript -e 'set volume output volume {new_vol}'")
+            except:
+                pass
+        else:
+            devices = AudioUtilities.GetSpeakers()
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            currentVolumeLv = volume.GetMasterVolumeLevelScalar()
+            currentVolumeLv += vol_change
+            currentVolumeLv = max(0.0, min(1.0, currentVolumeLv))
+            volume.SetMasterVolumeLevelScalar(currentVolumeLv, None)
+    
+    def scrollVertical():
+        pyautogui.scroll(10 if Controller.pinchlv>0.0 else -10)
+        
+    def scrollHorizontal():
+        pyautogui.keyDown('shift')
+        pyautogui.scroll(10 if Controller.pinchlv>0.0 else -10)
+        pyautogui.keyUp('shift')
+
+    def get_position(hand_result):
+        point = 9
+        position = [hand_result.landmark[point].x ,hand_result.landmark[point].y]
+        sx,sy = pyautogui.size()
+        x_old,y_old = pyautogui.position()
+        x = int(position[0]*sx)
+        y = int(position[1]*sy)
+        if Controller.prev_hand is None:
+            Controller.prev_hand = x,y
+        delta_x = x - Controller.prev_hand[0]
+        delta_y = y - Controller.prev_hand[1]
+
+        distsq = delta_x**2 + delta_y**2
+        ratio = 1
+        Controller.prev_hand = [x,y]
+
+        if distsq <= 25:
+            ratio = 0
+        elif distsq <= 900:
+            ratio = 0.07 * (distsq ** (1/2))
+        else:
+            ratio = 2.1
+        x , y = x_old + delta_x*ratio , y_old + delta_y*ratio
+        return (x,y)
+
+    def pinch_control_init(hand_result):
+        Controller.pinchstartxcoord = hand_result.landmark[8].x
+        Controller.pinchstartycoord = hand_result.landmark[8].y
+        Controller.pinchlv = 0
+        Controller.prevpinchlv = 0
+        Controller.framecount = 0
+
+    def pinch_control(hand_result, controlHorizontal, controlVertical):
+        if Controller.framecount == 5:
+            Controller.framecount = 0
+            Controller.pinchlv = Controller.prevpinchlv
+
+            if Controller.pinchdirectionflag == True:
+                controlHorizontal()
+
+            elif Controller.pinchdirectionflag == False:
+                controlVertical()
+
+        lvx =  Controller.getpinchxlv(hand_result)
+        lvy =  Controller.getpinchylv(hand_result)
+            
+        if abs(lvy) > abs(lvx) and abs(lvy) > Controller.pinch_threshold:
+            Controller.pinchdirectionflag = False
+            if abs(Controller.prevpinchlv - lvy) < Controller.pinch_threshold:
+                Controller.framecount += 1
+            else:
+                Controller.prevpinchlv = lvy
+                Controller.framecount = 0
+
+        elif abs(lvx) > Controller.pinch_threshold:
+            Controller.pinchdirectionflag = True
+            if abs(Controller.prevpinchlv - lvx) < Controller.pinch_threshold:
+                Controller.framecount += 1
+            else:
+                Controller.prevpinchlv = lvx
+                Controller.framecount = 0
+
+    def handle_controls(gesture, hand_result):  
+        x,y = None,None
+        if gesture != Gest.PALM :
+            x,y = Controller.get_position(hand_result)
+        
+        if gesture != Gest.FIST and Controller.grabflag:
+            Controller.grabflag = False
+            pyautogui.mouseUp(button = "left")
+
+        if gesture != Gest.PINCH_MAJOR and Controller.pinchmajorflag:
+            Controller.pinchmajorflag = False
+
+        if gesture != Gest.PINCH_MINOR and Controller.pinchminorflag:
+            Controller.pinchminorflag = False
+
+        if gesture == Gest.V_GEST:
+            Controller.flag = True
+            pyautogui.moveTo(x, y, duration = 0.1)
+
+        elif gesture == Gest.FIST:
+            if not Controller.grabflag : 
+                Controller.grabflag = True
+                pyautogui.mouseDown(button = "left")
+            pyautogui.moveTo(x, y, duration = 0.1)
+
+        elif gesture == Gest.MID and Controller.flag:
+            pyautogui.click()
+            Controller.flag = False
+
+        elif gesture == Gest.INDEX and Controller.flag:
+            pyautogui.click(button='right')
+            Controller.flag = False
+
+        elif gesture == Gest.TWO_FINGER_CLOSED and Controller.flag:
+            pyautogui.doubleClick()
+            Controller.flag = False
+
+        elif gesture == Gest.PINCH_MINOR:
+            if Controller.pinchminorflag == False:
+                Controller.pinch_control_init(hand_result)
+                Controller.pinchminorflag = True
+            Controller.pinch_control(hand_result,Controller.scrollHorizontal, Controller.scrollVertical)
+        
+        elif gesture == Gest.PINCH_MAJOR:
+            if Controller.pinchmajorflag == False:
+                Controller.pinch_control_init(hand_result)
+                Controller.pinchmajorflag = True
+            Controller.pinch_control(hand_result,Controller.changesystembrightness, Controller.changesystemvolume)
+
+class GestureController:
+    gc_mode = 0
+    cap = None
+    CAM_HEIGHT = None
+    CAM_WIDTH = None
+    hr_major = None 
+    hr_minor = None 
+    dom_hand = True
+
+    def __init__(self):
+        print("[DEBUG] Initializing GestureController...")
+        GestureController.gc_mode = 1
+        
+        # --- CAMERA INIT ATTEMPT 1 (Default) ---
+        print("[DEBUG] Attempting to open Camera 0...")
+        GestureController.cap = cv2.VideoCapture(0)
+        
+        # --- CAMERA INIT ATTEMPT 2 (Fallback for some Macs) ---
+        if not GestureController.cap.isOpened():
+             print("[DEBUG] Camera 0 failed. Attempting Camera 1...")
+             GestureController.cap = cv2.VideoCapture(1)
+
+        if not GestureController.cap.isOpened():
+             print("[CRITICAL ERROR] Could not open ANY camera. Check Permissions!")
+             GestureController.gc_mode = 0
+             return
+
+        GestureController.CAM_HEIGHT = GestureController.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        GestureController.CAM_WIDTH = GestureController.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        print(f"[DEBUG] Camera Initialized: {int(GestureController.CAM_WIDTH)}x{int(GestureController.CAM_HEIGHT)}")
+    
+    def classify_hands(results):
+        left , right = None,None
+        try:
+            for idx, hand_handedness in enumerate(results.multi_handedness):
+                label = hand_handedness.classification[0].label
+                if label == 'Right':
+                    right = results.multi_hand_landmarks[idx]
+                else:
+                    left = results.multi_hand_landmarks[idx]
+        except:
+            pass
+        
+        if GestureController.dom_hand == True:
+            GestureController.hr_major = right
+            GestureController.hr_minor = left
+        else :
+            GestureController.hr_major = left
+            GestureController.hr_minor = right
+
+    def start(self):
+        if GestureController.gc_mode == 0:
+            print("[DEBUG] GC Mode is 0. Exiting start().")
+            return
+
+        print("[DEBUG] Starting Main Loop...")
+        handmajor = HandRecog(HLabel.MAJOR)
+        handminor = HandRecog(HLabel.MINOR)
+
+        with mp_hands.Hands(max_num_hands = 2,min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
+            while GestureController.cap.isOpened() and GestureController.gc_mode:
+                
+                success, image = GestureController.cap.read()
+                if not success:
+                    print("[DEBUG] Ignoring empty camera frame.")
+                    continue
+                
+                # print(".", end="", flush=True) # Dot heartbeat
+                
+                image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+                image.flags.writeable = False
+                results = hands.process(image)
+                
+                image.flags.writeable = True
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+                if results.multi_hand_landmarks:                   
+                    GestureController.classify_hands(results)
+                    handmajor.update_hand_result(GestureController.hr_major)
+                    handminor.update_hand_result(GestureController.hr_minor)
+
+                    handmajor.set_finger_state()
+                    handminor.set_finger_state()
+                    gest_name = handminor.get_gesture()
+
+                    if gest_name == Gest.PINCH_MINOR:
+                        Controller.handle_controls(gest_name, handminor.hand_result)
+                    else:
+                        gest_name = handmajor.get_gesture()
+                        Controller.handle_controls(gest_name, handmajor.hand_result)
+                    
+                    for hand_landmarks in results.multi_hand_landmarks:
+                        mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                else:
+                    Controller.prev_hand = None
+                
+                cv2.imshow('Gesture Controller', image)
+                
+                # Check for ENTER key (13) to exit
+                if cv2.waitKey(5) & 0xFF == 13:
+                    print("\n[DEBUG] Exit key pressed.")
+                    break
+        
+        print("[DEBUG] Releasing camera and closing windows.")
+        GestureController.cap.release()
+        cv2.destroyAllWindows()
+
+# --- ENTRY POINT (Crucial for testing) ---
+if __name__ == "__main__":
+    print("[DEBUG] Running Gesture_Controller as main script")
+    gc = GestureController()
+    gc.start()
+
+    '''
+
+
+# #!  updated features
+
+# import cv2
+# import mediapipe as mp
+# import pyautogui
+# import math
+# import platform
+# import os
+# import subprocess
+# from enum import IntEnum
+# import screen_brightness_control as sbcontrol
+
+# # --- MACOS PATCH: Mock Windows Audio Libraries ---
+# IS_MACOS = platform.system() == "Darwin"
+
+# if not IS_MACOS:
+#     from ctypes import cast, POINTER
+#     from comtypes import CLSCTX_ALL
+#     from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+# # -------------------------------------------------
+
+# pyautogui.FAILSAFE = False
+# mp_drawing = mp.solutions.drawing_utils
+# mp_hands = mp.solutions.hands
+
+# class Gest(IntEnum):
+#     FIST = 0
+#     PINKY = 1
+#     RING = 2
+#     MID = 4
+#     LAST3 = 7
+#     INDEX = 8
+#     FIRST2 = 12
+#     THREE_FINGER = 14 # Index + Mid + Ring
+#     LAST4 = 15
+#     THUMB = 16    
+#     PALM = 31
+    
+#     # Complex Gestures
+#     V_GEST = 33
+#     TWO_FINGER_CLOSED = 34
+#     PINCH_MAJOR = 35
+#     PINCH_MINOR = 36
+
+# class HLabel(IntEnum):
+#     MINOR = 0
+#     MAJOR = 1
+
+# class HandRecog:
+#     def __init__(self, hand_label):
+#         self.finger = 0
+#         self.ori_gesture = Gest.PALM
+#         self.prev_gesture = Gest.PALM
+#         self.frame_count = 0
+#         self.hand_result = None
+#         self.hand_label = hand_label
+    
+#     def update_hand_result(self, hand_result):
+#         self.hand_result = hand_result
+
+#     def get_signed_dist(self, point):
+#         sign = -1
+#         if self.hand_result.landmark[point[0]].y < self.hand_result.landmark[point[1]].y:
+#             sign = 1
+#         dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
+#         dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
+#         dist = math.sqrt(dist)
+#         return dist*sign
+    
+#     def get_dist(self, point):
+#         dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
+#         dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
+#         dist = math.sqrt(dist)
+#         return dist
+    
+#     def get_dz(self,point):
+#         return abs(self.hand_result.landmark[point[0]].z - self.hand_result.landmark[point[1]].z)
+    
+#     def set_finger_state(self):
+#         if self.hand_result == None:
+#             return
+        
+#         # Points: Index, Middle, Ring, Pinky Tips vs Knuckles
+#         points = [[8,5,0],[12,9,0],[16,13,0],[20,17,0]]
+#         self.finger = 0
+        
+#         # Check Thumb separately (complex logic simplified here or assumed 0 for bitmask start)
+#         # We start bitmask at 0.
+        
+#         for idx,point in enumerate(points):
+#             dist = self.get_signed_dist(point[:2])
+#             dist2 = self.get_signed_dist(point[1:])
+#             try:
+#                 ratio = round(dist/dist2,1)
+#             except:
+#                 ratio = round(dist/0.01,1)
+            
+#             # Shift bit left to make room for new finger
+#             self.finger = self.finger << 1
+#             if ratio > 0.5 :
+#                 self.finger = self.finger | 1
+        
+#         # NOTE: This bitmask order ends up being: Index(8), Mid(4), Ring(2), Pinky(1)
+#         # Thumb is not in this loop, handled via Enum if needed, but basic logic above
+#         # creates the IDs we use.
+    
+#     def get_gesture(self):
+#         if self.hand_result == None:
+#             return Gest.PALM
+#         current_gesture = Gest.PALM
+        
+#         # Check for Pinches
+#         if self.finger in [Gest.LAST3,Gest.LAST4] and self.get_dist([8,4]) < 0.05:
+#             if self.hand_label == HLabel.MINOR :
+#                 current_gesture = Gest.PINCH_MINOR
+#             else:
+#                 current_gesture = Gest.PINCH_MAJOR
+        
+#         # Check for V Gesture
+#         elif Gest.FIRST2 == self.finger :
+#             point = [[8,12],[5,9]]
+#             dist1 = self.get_dist(point[0])
+#             dist2 = self.get_dist(point[1])
+#             ratio = dist1/dist2
+#             if ratio > 1.7:
+#                 current_gesture = Gest.V_GEST
+#             else:
+#                 if self.get_dz([8,12]) < 0.1:
+#                     current_gesture =  Gest.TWO_FINGER_CLOSED
+#                 else:
+#                     current_gesture =  Gest.MID
+        
+#         else:
+#             current_gesture =  self.finger
+        
+#         if current_gesture == self.prev_gesture:
+#             self.frame_count += 1
+#         else:
+#             self.frame_count = 0
+#         self.prev_gesture = current_gesture
+        
+#         if self.frame_count > 4 :
+#             self.ori_gesture = current_gesture
+#         return self.ori_gesture
+
+# class Controller:
+#     tx_old = 0
+#     ty_old = 0
+#     trial = True
+#     flag = False
+#     grabflag = False
+#     pinchmajorflag = False
+#     pinchminorflag = False
+#     pinchstartxcoord = None
+#     pinchstartycoord = None
+#     pinchdirectionflag = None
+#     prevpinchlv = 0
+#     pinchlv = 0
+#     framecount = 0
+#     prev_hand = None
+#     pinch_threshold = 0.3
+    
+#     def getpinchylv(hand_result):
+#         dist = round((Controller.pinchstartycoord - hand_result.landmark[8].y)*10,1)
+#         return dist
+
+#     def getpinchxlv(hand_result):
+#         dist = round((hand_result.landmark[8].x - Controller.pinchstartxcoord)*10,1)
+#         return dist
+    
+#     def changesystembrightness():
+#         """Mac-Compatible Brightness using Native Key Codes (F1/F2)"""
+#         # On Mac, KeyCode 144 is Brightness Up, 145 is Brightness Down
+#         if IS_MACOS:
+#             if Controller.pinchlv > 0:
+#                 # Pinch moved UP -> Increase Brightness
+#                 # We repeat the keypress based on magnitude to speed it up
+#                 repeats = int(abs(Controller.pinchlv)) + 1
+#                 for _ in range(min(repeats, 3)): # Limit speed
+#                     os.system("osascript -e 'tell application \"System Events\" to key code 144'")
+#             else:
+#                 # Pinch moved DOWN -> Decrease Brightness
+#                 repeats = int(abs(Controller.pinchlv)) + 1
+#                 for _ in range(min(repeats, 3)):
+#                     os.system("osascript -e 'tell application \"System Events\" to key code 145'")
+#         else:
+#             # Windows fallback
+#             currentBrightnessLv = sbcontrol.get_brightness(display=0)/100.0
+#             currentBrightnessLv += Controller.pinchlv/50.0
+#             if currentBrightnessLv > 1.0: currentBrightnessLv = 1.0
+#             elif currentBrightnessLv < 0.0: currentBrightnessLv = 0.0       
+#             sbcontrol.fade_brightness(int(100*currentBrightnessLv) , start = sbcontrol.get_brightness(display=0))
+    
+#     def changesystemvolume():
+#         vol_change = Controller.pinchlv / 50.0 
+        
+#         if IS_MACOS:
+#             try:
+#                 # Use simple osascript to set volume
+#                 cmd = "osascript -e 'output volume of (get volume settings)'"
+#                 current_vol = int(subprocess.check_output(cmd, shell=True).strip())
+#                 new_vol = int(current_vol + (vol_change * 100))
+#                 new_vol = max(0, min(100, new_vol))
+#                 os.system(f"osascript -e 'set volume output volume {new_vol}'")
+#             except:
+#                 pass
+#         else:
+#             devices = AudioUtilities.GetSpeakers()
+#             interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+#             volume = cast(interface, POINTER(IAudioEndpointVolume))
+#             currentVolumeLv = volume.GetMasterVolumeLevelScalar()
+#             currentVolumeLv += vol_change
+#             currentVolumeLv = max(0.0, min(1.0, currentVolumeLv))
+#             volume.SetMasterVolumeLevelScalar(currentVolumeLv, None)
+    
+#     def scrollVertical():
+#         pyautogui.scroll(10 if Controller.pinchlv>0.0 else -10)
+        
+#     def scrollHorizontal():
+#         pyautogui.keyDown('shift')
+#         pyautogui.scroll(10 if Controller.pinchlv>0.0 else -10)
+#         pyautogui.keyUp('shift')
+
+#     def get_position(hand_result):
+#         point = 9
+#         position = [hand_result.landmark[point].x ,hand_result.landmark[point].y]
+#         sx,sy = pyautogui.size()
+#         x_old,y_old = pyautogui.position()
+#         x = int(position[0]*sx)
+#         y = int(position[1]*sy)
+#         if Controller.prev_hand is None:
+#             Controller.prev_hand = x,y
+#         delta_x = x - Controller.prev_hand[0]
+#         delta_y = y - Controller.prev_hand[1]
+
+#         distsq = delta_x**2 + delta_y**2
+#         ratio = 1
+#         Controller.prev_hand = [x,y]
+
+#         if distsq <= 25:
+#             ratio = 0
+#         elif distsq <= 900:
+#             ratio = 0.07 * (distsq ** (1/2))
+#         else:
+#             ratio = 2.1
+#         x , y = x_old + delta_x*ratio , y_old + delta_y*ratio
+#         return (x,y)
+
+#     def pinch_control_init(hand_result):
+#         Controller.pinchstartxcoord = hand_result.landmark[8].x
+#         Controller.pinchstartycoord = hand_result.landmark[8].y
+#         Controller.pinchlv = 0
+#         Controller.prevpinchlv = 0
+#         Controller.framecount = 0
+
+#     def pinch_control(hand_result, controlHorizontal, controlVertical):
+#         if Controller.framecount == 5:
+#             Controller.framecount = 0
+#             Controller.pinchlv = Controller.prevpinchlv
+
+#             if Controller.pinchdirectionflag == True:
+#                 controlHorizontal()
+
+#             elif Controller.pinchdirectionflag == False:
+#                 controlVertical()
+
+#         lvx =  Controller.getpinchxlv(hand_result)
+#         lvy =  Controller.getpinchylv(hand_result)
+            
+#         if abs(lvy) > abs(lvx) and abs(lvy) > Controller.pinch_threshold:
+#             Controller.pinchdirectionflag = False
+#             if abs(Controller.prevpinchlv - lvy) < Controller.pinch_threshold:
+#                 Controller.framecount += 1
+#             else:
+#                 Controller.prevpinchlv = lvy
+#                 Controller.framecount = 0
+
+#         elif abs(lvx) > Controller.pinch_threshold:
+#             Controller.pinchdirectionflag = True
+#             if abs(Controller.prevpinchlv - lvx) < Controller.pinch_threshold:
+#                 Controller.framecount += 1
+#             else:
+#                 Controller.prevpinchlv = lvx
+#                 Controller.framecount = 0
+
+#     def handle_controls(gesture, hand_result):  
+#         x,y = None,None
+#         if gesture != Gest.PALM :
+#             x,y = Controller.get_position(hand_result)
+        
+#         # flag reset
+#         if gesture != Gest.FIST and Controller.grabflag:
+#             Controller.grabflag = False
+#             pyautogui.mouseUp(button = "left")
+
+#         if gesture != Gest.PINCH_MAJOR and Controller.pinchmajorflag:
+#             Controller.pinchmajorflag = False
+
+#         if gesture != Gest.PINCH_MINOR and Controller.pinchminorflag:
+#             Controller.pinchminorflag = False
+
+#         # --- GESTURE MAPPING ---
+        
+#         # 1. MOUSE MOVE (Peace/Victory ✌️)
+#         if gesture == Gest.V_GEST:
+#             Controller.flag = True
+#             pyautogui.moveTo(x, y, duration = 0.1)
+
+#         # 2. LEFT CLICK (Fist or Index ☝️ logic)
+#         elif gesture == Gest.FIST:
+#             if not Controller.grabflag : 
+#                 Controller.grabflag = True
+#                 pyautogui.mouseDown(button = "left")
+#             pyautogui.moveTo(x, y, duration = 0.1)
+
+#         elif gesture == Gest.MID and Controller.flag:
+#             pyautogui.click()
+#             Controller.flag = False
+
+#         elif gesture == Gest.INDEX and Controller.flag:
+#             pyautogui.click(button='right')
+#             Controller.flag = False
+
+#         elif gesture == Gest.TWO_FINGER_CLOSED and Controller.flag:
+#             pyautogui.doubleClick()
+#             Controller.flag = False
+
+#         # --- NEW FEATURES ---
+
+#         # # 3. MISSION CONTROL (Open Palm ✋)
+#         # # Ctrl + Up Arrow
+#         # elif gesture == Gest.PALM:
+#         #     if Controller.framecount == 0: 
+#         #         print("[DEBUG] Mission Control Triggered")
+#         #         pyautogui.hotkey('ctrl', 'up')
+        
+#         # 4. SCREENSHOT (Pinky Only 🤙)
+#         # Cmd + Shift + 3
+#         elif gesture == Gest.PINKY:
+#             if Controller.framecount == 0:
+#                 print("[DEBUG] Screenshot Triggered")
+#                 pyautogui.hotkey('command', 'shift', '3')
+
+#         # 5. SWITCH APP (Three Fingers Up: Index, Mid, Ring)
+#         # Cmd + Tab
+#         elif gesture == Gest.THREE_FINGER:
+#              if Controller.framecount == 0:
+#                 print("[DEBUG] Switch App Triggered")
+#                 pyautogui.hotkey('command', 'tab')
+
+#         # --------------------
+
+#         elif gesture == Gest.PINCH_MINOR:
+#             if Controller.pinchminorflag == False:
+#                 Controller.pinch_control_init(hand_result)
+#                 Controller.pinchminorflag = True
+#             Controller.pinch_control(hand_result,Controller.scrollHorizontal, Controller.scrollVertical)
+        
+#         elif gesture == Gest.PINCH_MAJOR:
+#             if Controller.pinchmajorflag == False:
+#                 Controller.pinch_control_init(hand_result)
+#                 Controller.pinchmajorflag = True
+#             Controller.pinch_control(hand_result,Controller.changesystembrightness, Controller.changesystemvolume)
+
+# class GestureController:
+#     gc_mode = 0
+#     cap = None
+#     CAM_HEIGHT = None
+#     CAM_WIDTH = None
+#     hr_major = None 
+#     hr_minor = None 
+#     dom_hand = True
+
+#     def __init__(self):
+#         print("[DEBUG] Initializing GestureController...")
+#         GestureController.gc_mode = 1
+#         GestureController.cap = cv2.VideoCapture(0)
+#         if not GestureController.cap.isOpened():
+#              GestureController.cap = cv2.VideoCapture(1)
+        
+#         GestureController.CAM_HEIGHT = GestureController.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+#         GestureController.CAM_WIDTH = GestureController.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+    
+#     def classify_hands(results):
+#         left , right = None,None
+#         try:
+#             for idx, hand_handedness in enumerate(results.multi_handedness):
+#                 label = hand_handedness.classification[0].label
+#                 if label == 'Right':
+#                     right = results.multi_hand_landmarks[idx]
+#                 else:
+#                     left = results.multi_hand_landmarks[idx]
+#         except:
+#             pass
+        
+#         if GestureController.dom_hand == True:
+#             GestureController.hr_major = right
+#             GestureController.hr_minor = left
+#         else :
+#             GestureController.hr_major = left
+#             GestureController.hr_minor = right
+
+#     def start(self):
+#         print("[DEBUG] Camera Started.")
+#         handmajor = HandRecog(HLabel.MAJOR)
+#         handminor = HandRecog(HLabel.MINOR)
+
+#         with mp_hands.Hands(max_num_hands = 2,min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
+#             while GestureController.cap.isOpened() and GestureController.gc_mode:
+#                 success, image = GestureController.cap.read()
+#                 if not success: continue
+                
+#                 image = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+#                 image.flags.writeable = False
+#                 results = hands.process(image)
+#                 image.flags.writeable = True
+#                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+#                 if results.multi_hand_landmarks:                   
+#                     GestureController.classify_hands(results)
+#                     handmajor.update_hand_result(GestureController.hr_major)
+#                     handminor.update_hand_result(GestureController.hr_minor)
+
+#                     handmajor.set_finger_state()
+#                     handminor.set_finger_state()
+#                     gest_name = handminor.get_gesture()
+
+#                     if gest_name == Gest.PINCH_MINOR:
+#                         Controller.handle_controls(gest_name, handminor.hand_result)
+#                     else:
+#                         gest_name = handmajor.get_gesture()
+#                         Controller.handle_controls(gest_name, handmajor.hand_result)
+                    
+#                     for hand_landmarks in results.multi_hand_landmarks:
+#                         mp_drawing.draw_landmarks(image, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+#                 else:
+#                     Controller.prev_hand = None
+                
+#                 cv2.imshow('Gesture Controller', image)
+#                 if cv2.waitKey(5) & 0xFF == 13:
+#                     break
+#         GestureController.cap.release()
+#         cv2.destroyAllWindows()
+
+# if __name__ == "__main__":
+#     gc = GestureController()
+#     gc.start()
+
+
 """
-Gesture Controller - Phase 2.2 Enhanced
-Dual-Mode: Mouse Control + ISL Recognition
-Platform: macOS Silicon (M1/M2/M3)
-"""
+
+
+#    # #!  Phase 2.1 - Dual Mode with MediaPipe Holistic
+
+
 
 import cv2
 import mediapipe as mp
@@ -12,52 +1486,28 @@ import platform
 import os
 import subprocess
 import time
-import numpy as np
-import collections
 from enum import IntEnum
+import screen_brightness_control as sbcontrol
+import collections
+import numpy as np
 
-# --- ML DEPENDENCIES (for Phase 2) ---
-try:
-    import tensorflow as tf
-    Interpreter = tf.lite.Interpreter
-except ImportError:
-    from tflite_runtime.interpreter import Interpreter
+# --- USER CONFIGURATION ---
+PRIMARY_HAND = "Left"  # "Left" usually detects Physical Right Hand in mirror mode
+SMOOTHING_FACTOR = 0.2 # Lower = Smoother/Heavier cursor (0.1 - 0.3 recommended)
+FRAME_REDUCTION = 100  # Sensitivity: Higher = Less hand movement required (100-150)
+# --------------------------
 
-# ═══════════════════════════════════════════════════════════════
-# CONFIGURATION SECTION
-# ═══════════════════════════════════════════════════════════════
-
-# --- PHASE 1: MOUSE CONTROL SETTINGS ---
-PRIMARY_HAND = "Left"           # "Left" = physical right hand (mirror mode)
-SMOOTHING_FACTOR = 0.35         # 0.1 (heavy) to 0.5 (light) - OPTIMIZED
-FRAME_REDUCTION = 80            # Active zone padding - ENLARGED
-DEAD_ZONE_RADIUS = 5            # Ignore movements smaller than this (pixels)
-CLICK_DEBOUNCE_TIME = 0.25      # Minimum time between clicks (seconds)
-PINCH_THRESHOLD = 0.045         # Distance for pinch detection (0-1 scale)
-GESTURE_HOLD_FRAMES = 2         # Frames to confirm gesture (was 4)
-
-# --- PHASE 2: ISL RECOGNITION SETTINGS ---
-CONFIDENCE_THRESHOLD = 0.70     # Minimum confidence to accept prediction
-PREDICTION_STABILITY = 10       # Number of frames for consensus
-DISPLAY_TIME = 3.0              # How long to show detected word (seconds)
-PREDICTION_COOLDOWN = 1.5       # Wait time before next detection (seconds)
-MODEL_PATH = "models/production/ISL_Model.tflite"
-LABELS_PATH = "data/processed/labels.npy"
-
-# --- SYSTEM SETTINGS ---
-DEBUG_MODE = True               # Show FPS and debug info
 IS_MACOS = platform.system() == "Darwin"
+if not IS_MACOS:
+    from ctypes import cast, POINTER
+    from comtypes import CLSCTX_ALL
+    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
 pyautogui.FAILSAFE = False
 mp_drawing = mp.solutions.drawing_utils
 mp_holistic = mp.solutions.holistic
 
-# ═══════════════════════════════════════════════════════════════
-# GESTURE RECOGNITION CLASSES
-# ═══════════════════════════════════════════════════════════════
-
 class Gest(IntEnum):
-    """Gesture enumeration using binary encoding"""
     FIST = 0
     PINKY = 1
     RING = 2
@@ -71,24 +1521,14 @@ class Gest(IntEnum):
     PALM = 31
     V_GEST = 33
     TWO_FINGER_CLOSED = 34
-    PINCH_MAJOR = 35      # Left Click
-    PINCH_MINOR = 36      # Right Click
+    PINCH_MAJOR = 35
+    PINCH_MINOR = 36
 
 class HLabel(IntEnum):
-    """Hand labels"""
     MINOR = 0
     MAJOR = 1
 
-# ═══════════════════════════════════════════════════════════════
-# HAND RECOGNITION CLASS
-# ═══════════════════════════════════════════════════════════════
-
 class HandRecog:
-    """
-    Converts MediaPipe landmarks to gesture classifications
-    Enhanced with better pinch detection and faster response
-    """
-    
     def __init__(self, hand_label):
         self.finger = 0
         self.ori_gesture = Gest.PALM
@@ -101,677 +1541,1028 @@ class HandRecog:
         self.hand_result = hand_result
 
     def get_signed_dist(self, point):
-        """Calculate signed Euclidean distance between two landmarks"""
-        if self.hand_result is None:
-            return 0
         sign = -1
         if self.hand_result.landmark[point[0]].y < self.hand_result.landmark[point[1]].y:
             sign = 1
         dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
         dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
-        return math.sqrt(dist) * sign
+        dist = math.sqrt(dist)
+        return dist*sign
     
     def get_dist(self, point):
-        """Calculate Euclidean distance between two landmarks"""
-        if self.hand_result is None:
-            return 0
         dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
         dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
-        return math.sqrt(dist)
+        dist = math.sqrt(dist)
+        return dist
     
-    def get_dz(self, point):
-        """Calculate Z-axis distance (depth)"""
-        if self.hand_result is None:
-            return 0
+    def get_dz(self,point):
         return abs(self.hand_result.landmark[point[0]].z - self.hand_result.landmark[point[1]].z)
     
     def set_finger_state(self):
-        """Determine which fingers are extended using geometric ratios"""
-        if self.hand_result is None:
+        if self.hand_result == None:
             return
-        
-        # Check each finger: Index(8), Middle(12), Ring(16), Pinky(20)
-        points = [[8,5,0], [12,9,0], [16,13,0], [20,17,0]]
+        points = [[8,5,0],[12,9,0],[16,13,0],[20,17,0]]
         self.finger = 0
-        
-        for idx, point in enumerate(points):
+        for idx,point in enumerate(points):
             dist = self.get_signed_dist(point[:2])
             dist2 = self.get_signed_dist(point[1:])
-            
             try:
-                ratio = round(dist/dist2, 1)
+                ratio = round(dist/dist2,1)
             except:
-                ratio = round(dist/0.01, 1)
-            
+                ratio = round(dist/0.01,1)
             self.finger = self.finger << 1
-            if ratio > 0.5:
+            if ratio > 0.5 :
                 self.finger = self.finger | 1
     
     def get_gesture(self):
-        """
-        Classify current hand pose into a gesture
-        IMPROVED: Better pinch detection and faster response
-        """
-        if self.hand_result is None:
+        if self.hand_result == None:
             return Gest.PALM
-        
         current_gesture = Gest.PALM
         
-        # ✅ IMPROVED: Distance-based pinch detection (more reliable)
-        index_thumb_dist = self.get_dist([8, 4])  # Index tip to thumb tip
-        middle_thumb_dist = self.get_dist([12, 4])  # Middle tip to thumb tip
+        if self.finger in [Gest.LAST3,Gest.LAST4] and self.get_dist([8,4]) < 0.05:
+            if self.hand_label == HLabel.MINOR :
+                current_gesture = Gest.PINCH_MINOR
+            else:
+                current_gesture = Gest.PINCH_MAJOR
         
-        # Left Click: Index + Thumb pinch
-        if index_thumb_dist < PINCH_THRESHOLD:
-            current_gesture = Gest.PINCH_MAJOR
-        
-        # Right Click: Middle + Thumb pinch
-        elif middle_thumb_dist < PINCH_THRESHOLD:
-            current_gesture = Gest.PINCH_MINOR
-        
-        # V-Gesture (Peace sign) for movement
-        elif Gest.FIRST2 == self.finger:
-            point = [[8,12], [5,9]]
+        elif Gest.FIRST2 == self.finger :
+            point = [[8,12],[5,9]]
             dist1 = self.get_dist(point[0])
             dist2 = self.get_dist(point[1])
-            ratio = dist1/dist2 if dist2 != 0 else 0
-            
+            ratio = dist1/dist2
             if ratio > 1.7:
                 current_gesture = Gest.V_GEST
             else:
                 if self.get_dz([8,12]) < 0.1:
-                    current_gesture = Gest.TWO_FINGER_CLOSED
+                    current_gesture =  Gest.TWO_FINGER_CLOSED
                 else:
-                    current_gesture = Gest.MID
-        
-        # Fist for drag
-        elif self.finger == Gest.FIST:
-            current_gesture = Gest.FIST
-        
-        # Default to finger state
+                    current_gesture =  Gest.MID
         else:
-            current_gesture = self.finger
+            current_gesture =  self.finger
         
-        # ✅ IMPROVED: Faster gesture confirmation (2 frames instead of 4)
         if current_gesture == self.prev_gesture:
             self.frame_count += 1
         else:
             self.frame_count = 0
-        
         self.prev_gesture = current_gesture
         
-        if self.frame_count > GESTURE_HOLD_FRAMES:
+        if self.frame_count > 4 :
             self.ori_gesture = current_gesture
-        
         return self.ori_gesture
 
-# ═══════════════════════════════════════════════════════════════
-# CONTROLLER CLASS (Mouse & System Control)
-# ═══════════════════════════════════════════════════════════════
-
 class Controller:
-    """
-    Handles OS-level interactions: mouse, keyboard, system controls
-    ENHANCED: Dead zone filtering, better smoothing, click debouncing
-    """
-    
-    # State variables
-    flag = False                # True when in movement mode (V-gesture)
-    grabflag = False           # True when dragging (fist)
-    pinchmajorflag = False     # True when left click held
-    pinchminorflag = False     # True when right click held
-    prev_hand = None           # Previous hand position for smoothing
-    dead_zone_center = None    # Center of dead zone for jitter reduction
-    last_click_time = 0        # Last click timestamp
-    
-    # Pinch control (for volume/brightness)
-    pinchmajorflag_system = False
-    pinchminorflag_system = False
+    tx_old = 0
+    ty_old = 0
+    flag = False # True if we are in "Move Mode"
+    grabflag = False
+    pinchmajorflag = False
+    pinchminorflag = False
     pinchstartxcoord = None
     pinchstartycoord = None
     pinchdirectionflag = None
     prevpinchlv = 0
     pinchlv = 0
     framecount = 0
+    prev_hand = None
     pinch_threshold = 0.3
     
-    @staticmethod
-    def apply_dead_zone(x, y):
-        """
-        Prevents micro-jitter by ignoring small movements
-        Creates a "dead zone" around the current position
-        """
-        if Controller.dead_zone_center is None:
-            Controller.dead_zone_center = (x, y)
-            return x, y
-        
-        dx = x - Controller.dead_zone_center[0]
-        dy = y - Controller.dead_zone_center[1]
-        dist = math.sqrt(dx*dx + dy*dy)
-        
-        if dist < DEAD_ZONE_RADIUS:
-            # Movement too small, stay at center
-            return Controller.dead_zone_center
-        else:
-            # Significant movement, update center
-            Controller.dead_zone_center = (x, y)
-            return x, y
+    # Cooldowns
+    last_screenshot_time = 0
+    last_app_switch_time = 0
     
-    @staticmethod
+    def getpinchylv(hand_result):
+        dist = round((Controller.pinchstartycoord - hand_result.landmark[8].y)*10,1)
+        return dist
+
+    def getpinchxlv(hand_result):
+        dist = round((hand_result.landmark[8].x - Controller.pinchstartxcoord)*10,1)
+        return dist
+    
+    def changesystembrightness():
+        if IS_MACOS:
+            if Controller.pinchlv > 0:
+                repeats = int(abs(Controller.pinchlv)) + 1
+                for _ in range(min(repeats, 3)):
+                    os.system("osascript -e 'tell application \"System Events\" to key code 144'")
+            else:
+                repeats = int(abs(Controller.pinchlv)) + 1
+                for _ in range(min(repeats, 3)):
+                    os.system("osascript -e 'tell application \"System Events\" to key code 145'")
+    
+    def changesystemvolume():
+        vol_change = Controller.pinchlv / 50.0 
+        if IS_MACOS:
+            try:
+                cmd = "osascript -e 'output volume of (get volume settings)'"
+                current_vol = int(subprocess.check_output(cmd, shell=True).strip())
+                new_vol = int(current_vol + (vol_change * 100))
+                new_vol = max(0, min(100, new_vol))
+                os.system(f"osascript -e 'set volume output volume {new_vol}'")
+            except: pass
+    
+    def scrollVertical():
+        pyautogui.scroll(10 if Controller.pinchlv>0.0 else -10)
+        
+    def scrollHorizontal():
+        pyautogui.keyDown('shift')
+        pyautogui.scroll(10 if Controller.pinchlv>0.0 else -10)
+        pyautogui.keyUp('shift')
+
+    # --- SENSITIVITY AMPLIFICATION & SMOOTHING ---
     def get_position(hand_result):
-        """
-        Convert hand landmark to screen coordinates
-        ENHANCED: Dead zone + exponential smoothing + acceleration curve
-        """
-        point = 9  # Middle of hand (wrist base)
-        raw_x = hand_result.landmark[point].x
+        point = 9 
+        # Raw Coordinates (0.0 to 1.0)
+        raw_x = hand_result.landmark[point].x 
         raw_y = hand_result.landmark[point].y
         
-        # Get dimensions
+        # Camera & Screen Dimensions
         wCam, hCam = int(GestureController.CAM_WIDTH), int(GestureController.CAM_HEIGHT)
         wScr, hScr = pyautogui.size()
-        
+
         # Convert normalized coords to camera pixels
         x1 = raw_x * wCam
         y1 = raw_y * hCam
-        
-        # ✅ STEP 1: Amplification (map reduced frame to full screen)
+
+        # 1. Coordinate Interpolation (Amplification)
+        # Map the Reduced Frame (wCam - 2*FRAME_REDUCTION) to Full Screen (wScr)
+        # This means moving hand 1 inch in camera = 10 inches on screen
         x3 = np.interp(x1, (FRAME_REDUCTION, wCam - FRAME_REDUCTION), (0, wScr))
         y3 = np.interp(y1, (FRAME_REDUCTION, hCam - FRAME_REDUCTION), (0, hScr))
         
-        # ✅ STEP 2: Apply dead zone (removes jitter)
-        x3, y3 = Controller.apply_dead_zone(int(x3), int(y3))
-        
-        # ✅ STEP 3: Exponential smoothing (prevents jerky movement)
+        # 2. Smooth Values
         if Controller.prev_hand is None:
             Controller.prev_hand = [x3, y3]
             return (int(x3), int(y3))
-        
+
+        # Exponential Smoothing
         curr_x = Controller.prev_hand[0] + (x3 - Controller.prev_hand[0]) * SMOOTHING_FACTOR
         curr_y = Controller.prev_hand[1] + (y3 - Controller.prev_hand[1]) * SMOOTHING_FACTOR
         
         Controller.prev_hand = [curr_x, curr_y]
         return (int(curr_x), int(curr_y))
-    
-    @staticmethod
-    def handle_controls(gesture, hand_result):
-        """
-        Map gestures to OS actions
-        IMPROVED: Better state management and click debouncing
-        """
-        x, y = None, None
-        if gesture != Gest.PALM:
-            x, y = Controller.get_position(hand_result)
+
+    def pinch_control_init(hand_result):
+        Controller.pinchstartxcoord = hand_result.landmark[8].x
+        Controller.pinchstartycoord = hand_result.landmark[8].y
+        Controller.pinchlv = 0
+        Controller.prevpinchlv = 0
+        Controller.framecount = 0
+
+    def pinch_control(hand_result, controlHorizontal, controlVertical):
+        if Controller.framecount == 5:
+            Controller.framecount = 0
+            Controller.pinchlv = Controller.prevpinchlv
+
+            if Controller.pinchdirectionflag == True:
+                controlHorizontal()
+
+            elif Controller.pinchdirectionflag == False:
+                controlVertical()
+
+        lvx =  Controller.getpinchxlv(hand_result)
+        lvy =  Controller.getpinchylv(hand_result)
+            
+        if abs(lvy) > abs(lvx) and abs(lvy) > Controller.pinch_threshold:
+            Controller.pinchdirectionflag = False
+            if abs(Controller.prevpinchlv - lvy) < Controller.pinch_threshold:
+                Controller.framecount += 1
+            else:
+                Controller.prevpinchlv = lvy
+                Controller.framecount = 0
+
+        elif abs(lvx) > Controller.pinch_threshold:
+            Controller.pinchdirectionflag = True
+            if abs(Controller.prevpinchlv - lvx) < Controller.pinch_threshold:
+                Controller.framecount += 1
+            else:
+                Controller.prevpinchlv = lvx
+                Controller.framecount = 0
+
+    def handle_controls(gesture, hand_result):  
+        x,y = None,None
+        if gesture != Gest.PALM :
+            x,y = Controller.get_position(hand_result)
         
-        # ═══ STATE MANAGEMENT ═══
-        
-        # Release drag if not in fist
         if gesture != Gest.FIST and Controller.grabflag:
             Controller.grabflag = False
-            pyautogui.mouseUp(button="left")
-            if DEBUG_MODE:
-                print("[MOUSE] Drag released")
-        
-        # Release clicks if not pinching
+            pyautogui.mouseUp(button = "left")
+
         if gesture != Gest.PINCH_MAJOR and Controller.pinchmajorflag:
             Controller.pinchmajorflag = False
-        
+
         if gesture != Gest.PINCH_MINOR and Controller.pinchminorflag:
             Controller.pinchminorflag = False
-        
-        # ═══ GESTURE ACTIONS ═══
-        
-        # 1. MOVE: V-Gesture (Peace sign ✌️)
+
+        # --- REFINED MAPPING ---
+
+        # 1. MOVE: V-Gesture
         if gesture == Gest.V_GEST:
             Controller.flag = True
-            pyautogui.moveTo(x, y, duration=0)
-            Controller.dead_zone_center = None  # Reset dead zone when moving
-        
-        # 2. LEFT CLICK: Index + Thumb pinch
-        elif gesture == Gest.PINCH_MAJOR:
-            if not Controller.pinchmajorflag:
-                current_time = time.time()
-                # Debounce: prevent accidental double-clicks
-                if current_time - Controller.last_click_time > CLICK_DEBOUNCE_TIME:
-                    Controller.pinchmajorflag = True
-                    pyautogui.click(button='left')
-                    Controller.last_click_time = current_time
-                    if DEBUG_MODE:
-                        print("[MOUSE] Left Click")
-        
-        # 3. RIGHT CLICK: Middle + Thumb pinch
-        elif gesture == Gest.PINCH_MINOR:
-            if not Controller.pinchminorflag:
-                current_time = time.time()
-                if current_time - Controller.last_click_time > CLICK_DEBOUNCE_TIME:
-                    Controller.pinchminorflag = True
-                    pyautogui.click(button='right')
-                    Controller.last_click_time = current_time
-                    if DEBUG_MODE:
-                        print("[MOUSE] Right Click")
-        
-        # 4. DRAG: Fist (closed hand)
+            pyautogui.moveTo(x, y, duration = 0)
+
+        # 2. CLICK: Index Only
+        elif gesture == Gest.INDEX and Controller.flag:
+            # Only click if we were previously moving
+            pyautogui.click()
+            Controller.flag = False 
+
+        # 3. RIGHT CLICK: Middle Only
+        elif gesture == Gest.MID and Controller.flag:
+            pyautogui.click(button='right')
+            Controller.flag = False 
+
+        # 4. DRAG: Fist
         elif gesture == Gest.FIST:
-            if not Controller.grabflag:
+            if not Controller.grabflag : 
                 Controller.grabflag = True
-                pyautogui.mouseDown(button="left")
-                if DEBUG_MODE:
-                    print("[MOUSE] Drag started")
-            pyautogui.moveTo(x, y, duration=0)
-        
-        # 5. DOUBLE CLICK: Two fingers closed
+                pyautogui.mouseDown(button = "left")
+            pyautogui.moveTo(x, y, duration = 0)
+
+        # 5. DOUBLE CLICK: Two Fingers Closed
         elif gesture == Gest.TWO_FINGER_CLOSED and Controller.flag:
             pyautogui.doubleClick()
             Controller.flag = False
-            if DEBUG_MODE:
-                print("[MOUSE] Double Click")
-        
-        # IDLE: Palm open (no action)
-        elif gesture == Gest.PALM:
-            Controller.flag = False
 
-# ═══════════════════════════════════════════════════════════════
-# ISL ENGINE (Phase 2 - Sign Language Recognition)
-# ═══════════════════════════════════════════════════════════════
+        # --- TRIGGER ACTIONS ---
 
-class ISLEngine:
-    """
-    TensorFlow Lite inference engine for ISL recognition
-    Loads model and performs predictions on landmark sequences
-    """
-    
-    def __init__(self, model_path, labels_path):
-        print(f"[ISL] Loading model from {model_path}...")
-        self.is_loaded = False
-        
-        try:
-            # Load TFLite model
-            self.interpreter = Interpreter(model_path=model_path)
-            self.interpreter.allocate_tensors()
-            self.input_details = self.interpreter.get_input_details()
-            self.output_details = self.interpreter.get_output_details()
-            
-            # Load label mapping
-            self.labels_map = np.load(labels_path, allow_pickle=True).item()
-            self.id_to_label = {v: k for k, v in self.labels_map.items()}
-            
-            print(f"[ISL] ✅ Model loaded: {len(self.labels_map)} classes")
-            self.is_loaded = True
-            
-        except Exception as e:
-            print(f"[ISL] ❌ ERROR: Could not load model - {e}")
-            print("[ISL] Sign language mode will be disabled")
-    
-    def extract_features(self, results):
-        """
-        Extract 198 keypoints from MediaPipe Holistic results
-        Format: [Pose(24*3), Left_Hand(21*3), Right_Hand(21*3)] = 198
-        """
-        # Pose (upper body only, 24 landmarks)
-        if results.pose_landmarks:
-            pose = np.array([[res.x, res.y, res.z] 
-                           for res in results.pose_landmarks.landmark[:24]]).flatten()
-        else:
-            pose = np.zeros(24 * 3)
-        
-        # Left hand (21 landmarks)
-        if results.left_hand_landmarks:
-            lh = np.array([[res.x, res.y, res.z] 
-                         for res in results.left_hand_landmarks.landmark]).flatten()
-        else:
-            lh = np.zeros(21 * 3)
-        
-        # Right hand (21 landmarks)
-        if results.right_hand_landmarks:
-            rh = np.array([[res.x, res.y, res.z] 
-                         for res in results.right_hand_landmarks.landmark]).flatten()
-        else:
-            rh = np.zeros(21 * 3)
-        
-        return np.concatenate([pose, lh, rh])
-    
-    def predict(self, sequence_buffer):
-        """
-        Run inference on 30-frame sequence
-        Returns: (predicted_word, confidence)
-        """
-        if not self.is_loaded:
-            return "Model Error", 0.0
-        
-        try:
-            # Prepare input (batch_size=1, frames=30, features=198)
-            input_data = np.expand_dims(sequence_buffer, axis=0).astype(np.float32)
-            
-            # Run inference
-            self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
-            self.interpreter.invoke()
-            output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
-            
-            # Get prediction
-            prediction_id = np.argmax(output_data)
-            confidence = np.max(output_data)
-            predicted_word = self.id_to_label.get(prediction_id, "Unknown")
-            
-            return predicted_word, confidence
-            
-        except Exception as e:
-            print(f"[ISL] Prediction error: {e}")
-            return "Error", 0.0
+        elif gesture == Gest.PINKY:
+            if time.time() - Controller.last_screenshot_time > 2.0:
+                pyautogui.hotkey('command', 'shift', '3')
+                Controller.last_screenshot_time = time.time()
 
-# ═══════════════════════════════════════════════════════════════
-# MAIN GESTURE CONTROLLER
-# ═══════════════════════════════════════════════════════════════
+        elif gesture == Gest.THREE_FINGER:
+             if time.time() - Controller.last_app_switch_time > 2.0:
+                pyautogui.hotkey('command', 'tab')
+                Controller.last_app_switch_time = time.time()
+
+        # --- PINCH CONTROLS ---
+
+        elif gesture == Gest.PINCH_MINOR:
+            if Controller.pinchminorflag == False:
+                Controller.pinch_control_init(hand_result)
+                Controller.pinchminorflag = True
+            Controller.pinch_control(hand_result,Controller.scrollHorizontal, Controller.scrollVertical)
+        
+        elif gesture == Gest.PINCH_MAJOR:
+            if Controller.pinchmajorflag == False:
+                Controller.pinch_control_init(hand_result)
+                Controller.pinchmajorflag = True
+            Controller.pinch_control(hand_result,Controller.changesystembrightness, Controller.changesystemvolume)
+
 
 class GestureController:
-    """
-    Main controller - manages camera, modes, and UI
-    Dual Mode: Mouse Control (Phase 1) + ISL Recognition (Phase 2)
-    """
-    
-    # Class variables
-    gc_mode = 1
+    gc_mode = 0
     cap = None
-    is_signing_mode = False
-    sequence_buffer = []
+    is_signing_mode = False 
+    sequence_buffer = []    
     CAM_WIDTH = 0
     CAM_HEIGHT = 0
     
-    # ISL prediction tracking
-    last_predictions = collections.deque(maxlen=PREDICTION_STABILITY)
-    current_display_word = ""
-    display_timer = 0
-    last_detection_time = 0
-    
-    # FPS tracking
-    fps = 0
-    frame_count = 0
-    fps_start_time = 0
-    
     def __init__(self):
-        print("[INIT] Initializing Gesture Controller...")
-        print(f"[INIT] Platform: {'macOS' if IS_MACOS else 'Other'}")
-        
-        # Initialize sequence buffer
-        GestureController.sequence_buffer = collections.deque(maxlen=30)
-        
-        # Load ISL model (Phase 2)
-        if os.path.exists(MODEL_PATH) and os.path.exists(LABELS_PATH):
-            self.isl_engine = ISLEngine(MODEL_PATH, LABELS_PATH)
-        else:
-            print("[INIT] ⚠️  ISL model not found - Sign mode will be disabled")
-            print(f"[INIT] Expected: {MODEL_PATH}")
-            self.isl_engine = None
-        
-        # Initialize camera
+        print("[DEBUG] Initializing GestureController...")
+        GestureController.gc_mode = 1
+        GestureController.sequence_buffer = collections.deque(maxlen=45)
+
         GestureController.cap = cv2.VideoCapture(0)
         if not GestureController.cap.isOpened():
-            print("[INIT] Camera 0 failed, trying camera 1...")
-            GestureController.cap = cv2.VideoCapture(1)
+             GestureController.cap = cv2.VideoCapture(1)
         
-        if not GestureController.cap.isOpened():
-            print("[INIT] ❌ ERROR: Could not open camera!")
-            GestureController.gc_mode = 0
-            return
-        
-        # Set resolution for better performance
-        GestureController.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        GestureController.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        # Set Resolution (Optional - improves FPS)
+        GestureController.cap.set(3, 640)
+        GestureController.cap.set(4, 480)
         
         GestureController.CAM_WIDTH = GestureController.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
         GestureController.CAM_HEIGHT = GestureController.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        
-        print(f"[INIT] ✅ Camera initialized: {int(GestureController.CAM_WIDTH)}x{int(GestureController.CAM_HEIGHT)}")
-        print(f"[INIT] Primary hand: {PRIMARY_HAND}")
-        print("[INIT] Ready! Press 'Q' to toggle modes, 'ESC' to exit")
-    
-    def toggle_mode(self):
-        """Switch between Mouse Control and Sign Language modes"""
-        if self.isl_engine is None or not self.isl_engine.is_loaded:
-            print("[MODE] ⚠️  Sign language mode unavailable (model not loaded)")
-            return
-        
-        GestureController.is_signing_mode = not GestureController.is_signing_mode
-        mode_name = "SIGN LANGUAGE" if GestureController.is_signing_mode else "MOUSE CONTROL"
-        print(f"[MODE] Switched to: {mode_name}")
-        
-        # Reset states
-        Controller.flag = False
-        Controller.grabflag = False
-        Controller.prev_hand = None
-        GestureController.sequence_buffer.clear()
-        GestureController.last_predictions.clear()
-    
-    def draw_ui(self, image):
-        """Draw UI overlays based on current mode"""
-        h, w = image.shape[:2]
-        
-        if not GestureController.is_signing_mode:
-            # ═══ MOUSE MODE UI ═══
-            
-            # Draw active zone box
-            cv2.rectangle(
-                image, 
-                (FRAME_REDUCTION, FRAME_REDUCTION), 
-                (w - FRAME_REDUCTION, h - FRAME_REDUCTION),
-                (255, 0, 255), 2
-            )
-            
-            # Mode indicator
-            cv2.rectangle(image, (0, 0), (200, 40), (50, 50, 50), -1)
-            cv2.putText(
-                image, "MOUSE MODE", (10, 25),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2
-            )
-            
-            # Instructions
-            cv2.putText(
-                image, "V: Move | Pinch: Click | Fist: Drag", (10, h - 10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1
-            )
-            
-        else:
-            # ═══ SIGN MODE UI ═══
-            
-            # Header bar
-            cv2.rectangle(image, (0, 0), (w, 50), (0, 0, 0), -1)
-            cv2.putText(
-                image, "SIGN LANGUAGE MODE", (10, 30),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2
-            )
-            
-            # Show detected word with timer
-            current_time = time.time()
-            if current_time - self.display_timer < DISPLAY_TIME:
-                remaining = int(DISPLAY_TIME - (current_time - self.display_timer))
-                cv2.rectangle(image, (0, h - 80), (w, h), (0, 0, 0), -1)
-                cv2.putText(
-                    image, f"{self.current_display_word} ({remaining}s)", 
-                    (20, h - 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3
-                )
-            else:
-                # Show "Ready" when cooldown is done
-                can_predict = (current_time - self.last_detection_time) > PREDICTION_COOLDOWN
-                if can_predict:
-                    cv2.putText(
-                        image, "Ready...", (20, h - 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (200, 200, 200), 2
-                    )
-        
-        # ═══ COMMON UI ═══
-        
-        # FPS counter
-        if DEBUG_MODE:
-            cv2.putText(
-                image, f"FPS: {int(self.fps)}", (w - 100, 25),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2
-            )
-        
-        # Mode toggle hint
-        cv2.putText(
-            image, "Q: Toggle Mode | ESC: Exit", (10, h - 30),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.4, (150, 150, 150), 1
-        )
-        
-        return image
-    
-    def update_fps(self):
-        """Calculate and update FPS"""
-        self.frame_count += 1
-        if self.frame_count % 30 == 0:
-            current_time = time.time()
-            self.fps = 30 / (current_time - self.fps_start_time)
-            self.fps_start_time = current_time
-    
+
     def start(self):
-        """Main loop - handles camera feed and gesture processing"""
-        if GestureController.gc_mode == 0:
-            print("[ERROR] Controller not initialized properly")
-            return
-        
-        print("[START] Starting main loop...")
-        self.fps_start_time = time.time()
-        
+        print(f"[DEBUG] Started. Target Hand: {PRIMARY_HAND}")
         handmajor = HandRecog(HLabel.MAJOR)
-        
-        with mp_holistic.Holistic(
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        ) as holistic:
-            
-            while GestureController.cap.isOpened():
+        handminor = HandRecog(HLabel.MINOR)
+
+        with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
+            while GestureController.cap.isOpened() and GestureController.gc_mode:
                 success, image = GestureController.cap.read()
-                if not success:
-                    continue
+                if not success: continue
                 
-                # Mirror the image
+                # Flip for mirror effect
                 image = cv2.flip(image, 1)
                 
-                # Handle keyboard input
-                key = cv2.waitKey(5) & 0xFF
-                if key == ord('q') or key == ord('Q'):
-                    self.toggle_mode()
-                elif key == 27:  # ESC
-                    print("[EXIT] User requested exit")
-                    break
+                # --- DRAW ACTIVE ZONE ---
+                # This rectangle shows where your hand needs to be
+                w, h = int(GestureController.CAM_WIDTH), int(GestureController.CAM_HEIGHT)
+                cv2.rectangle(image, (FRAME_REDUCTION, FRAME_REDUCTION), 
+                              (w - FRAME_REDUCTION, h - FRAME_REDUCTION), (255, 0, 255), 2)
+                # ------------------------
                 
-                # Process with MediaPipe
                 image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 image_rgb.flags.writeable = False
                 results = holistic.process(image_rgb)
                 image_rgb.flags.writeable = True
-                
-                # ═══════════════════════════════════════════════
-                # MODE 1: MOUSE CONTROL
-                # ═══════════════════════════════════════════════
-                
+
                 if not GestureController.is_signing_mode:
                     
-                    # Get the primary hand
-                    mouse_hand = (results.left_hand_landmarks 
-                                if PRIMARY_HAND == "Left" 
-                                else results.right_hand_landmarks)
-                    
+                    mouse_hand = None
+                    secondary_hand = None
+
+                    if PRIMARY_HAND == "Left":
+                         mouse_hand = results.left_hand_landmarks
+                         secondary_hand = results.right_hand_landmarks
+                    else:
+                         mouse_hand = results.right_hand_landmarks
+                         secondary_hand = results.left_hand_landmarks
+
                     if mouse_hand:
-                        # Update hand state
                         handmajor.update_hand_result(mouse_hand)
                         handmajor.set_finger_state()
                         gest_name = handmajor.get_gesture()
-                        
-                        # Execute control
                         Controller.handle_controls(gest_name, handmajor.hand_result)
-                        
-                        # Draw hand landmarks
-                        mp_drawing.draw_landmarks(
-                            image, mouse_hand, 
-                            mp_holistic.HAND_CONNECTIONS
-                        )
-                
-                # ═══════════════════════════════════════════════
-                # MODE 2: SIGN LANGUAGE RECOGNITION
-                # ═══════════════════════════════════════════════
-                
+                        mp_drawing.draw_landmarks(image, mouse_hand, mp_holistic.HAND_CONNECTIONS)
+                    
+                    if secondary_hand:
+                        handminor.update_hand_result(secondary_hand)
+                        handminor.set_finger_state()
+                        gest_name = handminor.get_gesture()
+                        if gest_name == Gest.PINCH_MINOR or gest_name == Gest.PINCH_MAJOR:
+                             Controller.handle_controls(gest_name, handminor.hand_result)
+                        mp_drawing.draw_landmarks(image, secondary_hand, mp_holistic.HAND_CONNECTIONS)
+
                 else:
-                    if self.isl_engine is not None and self.isl_engine.is_loaded:
-                        
-                        # Draw full skeleton
-                        mp_drawing.draw_landmarks(
-                            image, results.pose_landmarks, 
-                            mp_holistic.POSE_CONNECTIONS
-                        )
-                        mp_drawing.draw_landmarks(
-                            image, results.left_hand_landmarks, 
-                            mp_holistic.HAND_CONNECTIONS
-                        )
-                        mp_drawing.draw_landmarks(
-                            image, results.right_hand_landmarks, 
-                            mp_holistic.HAND_CONNECTIONS
-                        )
-                        
-                        # Check if we can predict (cooldown expired)
-                        current_time = time.time()
-                        can_predict = (current_time - self.last_detection_time) > PREDICTION_COOLDOWN
-                        
-                        if results.pose_landmarks and can_predict:
-                            # Extract features and add to buffer
-                            keypoints = self.isl_engine.extract_features(results)
-                            GestureController.sequence_buffer.append(keypoints)
-                            
-                            # When buffer is full, predict
-                            if len(GestureController.sequence_buffer) == 30:
-                                word, conf = self.isl_engine.predict(
-                                    GestureController.sequence_buffer
-                                )
-                                
-                                # Stability check
-                                if conf > CONFIDENCE_THRESHOLD:
-                                    self.last_predictions.append(word)
-                                    
-                                    # Check for consensus (80% agreement)
-                                    if len(self.last_predictions) == PREDICTION_STABILITY:
-                                        from collections import Counter
-                                        word_counts = Counter(self.last_predictions)
-                                        most_common_word, count = word_counts.most_common(1)[0]
-                                        
-                                        # Need 80% agreement
-                                        agreement_threshold = int(PREDICTION_STABILITY * 0.8)
-                                        if count >= agreement_threshold:
-                                            if self.current_display_word != most_common_word:
-                                                self.current_display_word = most_common_word
-                                                self.display_timer = current_time
-                                                self.last_detection_time = current_time
-                                                print(f"[DETECTED] {most_common_word} (conf: {conf:.2f})")
-                                                
-                                                # Clear buffer to prevent re-detection
-                                                self.last_predictions.clear()
-                
-                # Update FPS
-                self.update_fps()
-                
-                # Draw UI overlays
-                image = self.draw_ui(image)
-                
-                # Display
+                    if results.pose_landmarks and results.right_hand_landmarks:
+                         mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
+                         cv2.putText(image, "SIGN MODE ACTIVE", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
                 cv2.imshow('Gesture Controller', image)
-        
-        # Cleanup
-        print("[STOP] Releasing resources...")
+                if cv2.waitKey(5) & 0xFF == 13: break
+                    
         GestureController.cap.release()
         cv2.destroyAllWindows()
-        print("[STOP] Gesture Controller stopped")
-
-# ═══════════════════════════════════════════════════════════════
-# ENTRY POINT
-# ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("  GESTURE CONTROLLER - Phase 1 (Mouse Control)")
-    print("=" * 60)
-    
     gc = GestureController()
+    gc.start()
+
+
+    """
+
+
+#! phase 2.2 - Refined Gesture Controller with ISL language mode
+
+# import cv2
+# import mediapipe as mp
+# import pyautogui
+# import math
+# import platform
+# import os
+# import subprocess
+# import time
+# import numpy as np
+# import collections
+# from enum import IntEnum
+
+# # --- ML DEPENDENCIES ---
+# try:
+#     import tensorflow as tf
+#     Interpreter = tf.lite.Interpreter
+# except ImportError:
+#     # Fallback if full TF isn't installed (lighter runtime)
+#     from tflite_runtime.interpreter import Interpreter
+
+# # --- CONFIGURATION ---
+# PRIMARY_HAND = "Left" 
+# SMOOTHING_FACTOR = 0.4 
+# FRAME_REDUCTION = 100  
+# CONFIDENCE_THRESHOLD = 0.70 # Only speak if 70% sure
+# MODEL_PATH = "models/production/ISL_Model.tflite"
+# LABELS_PATH = "data/processed/labels.npy"
+
+# # --- MACOS PATCH ---
+# IS_MACOS = platform.system() == "Darwin"
+# if not IS_MACOS:
+#     from ctypes import cast, POINTER
+#     from comtypes import CLSCTX_ALL
+#     from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+
+# pyautogui.FAILSAFE = False
+# mp_drawing = mp.solutions.drawing_utils
+# mp_holistic = mp.solutions.holistic
+
+# # --- PHASE 1 CLASSES (Mouse) ---
+# class Gest(IntEnum):
+#     FIST = 0; PINKY = 1; RING = 2; MID = 4; LAST3 = 7; INDEX = 8; FIRST2 = 12
+#     THREE_FINGER = 14; LAST4 = 15; THUMB = 16; PALM = 31; V_GEST = 33
+#     TWO_FINGER_CLOSED = 34; PINCH_MAJOR = 35; PINCH_MINOR = 36
+
+# class HLabel(IntEnum): MINOR = 0; MAJOR = 1
+
+# class HandRecog:
+#     def __init__(self, hand_label):
+#         self.finger = 0; self.ori_gesture = Gest.PALM; self.prev_gesture = Gest.PALM
+#         self.frame_count = 0; self.hand_result = None; self.hand_label = hand_label
     
-    if gc.gc_mode == 1:
-        gc.start()
-    else:
-        print("[FATAL] Initialization failed. Check camera permissions.")
+#     def update_hand_result(self, hand_result): self.hand_result = hand_result
+
+#     def get_signed_dist(self, point):
+#         sign = -1
+#         if self.hand_result.landmark[point[0]].y < self.hand_result.landmark[point[1]].y: sign = 1
+#         dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
+#         dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
+#         return math.sqrt(dist)*sign
+    
+#     def get_dist(self, point):
+#         dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
+#         dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
+#         return math.sqrt(dist)
+    
+#     def get_dz(self,point): return abs(self.hand_result.landmark[point[0]].z - self.hand_result.landmark[point[1]].z)
+    
+#     def set_finger_state(self):
+#         if self.hand_result == None: return
+#         points = [[8,5,0],[12,9,0],[16,13,0],[20,17,0]]
+#         self.finger = 0
+#         for idx,point in enumerate(points):
+#             dist = self.get_signed_dist(point[:2])
+#             dist2 = self.get_signed_dist(point[1:])
+#             try: ratio = round(dist/dist2,1)
+#             except: ratio = round(dist/0.01,1)
+#             self.finger = self.finger << 1
+#             if ratio > 0.5 : self.finger = self.finger | 1
+    
+#     def get_gesture(self):
+#         if self.hand_result == None: return Gest.PALM
+#         current_gesture = Gest.PALM
+#         if self.finger in [Gest.LAST3,Gest.LAST4] and self.get_dist([8,4]) < 0.05:
+#             if self.hand_label == HLabel.MINOR : current_gesture = Gest.PINCH_MINOR
+#             else: current_gesture = Gest.PINCH_MAJOR
+#         elif Gest.FIRST2 == self.finger :
+#             point = [[8,12],[5,9]]
+#             dist1 = self.get_dist(point[0]); dist2 = self.get_dist(point[1]); ratio = dist1/dist2
+#             if ratio > 1.7: current_gesture = Gest.V_GEST
+#             else:
+#                 if self.get_dz([8,12]) < 0.1: current_gesture =  Gest.TWO_FINGER_CLOSED
+#                 else: current_gesture =  Gest.MID
+#         else: current_gesture =  self.finger
+#         if current_gesture == self.prev_gesture: self.frame_count += 1
+#         else: self.frame_count = 0
+#         self.prev_gesture = current_gesture
+#         if self.frame_count > 4 : self.ori_gesture = current_gesture
+#         return self.ori_gesture
+
+# class Controller:
+#     tx_old = 0; ty_old = 0; flag = False; grabflag = False; pinchmajorflag = False; pinchminorflag = False
+#     pinchstartxcoord = None; pinchstartycoord = None; pinchdirectionflag = None
+#     prevpinchlv = 0; pinchlv = 0; framecount = 0; prev_hand = None; pinch_threshold = 0.3
+#     last_screenshot_time = 0; last_app_switch_time = 0; last_sign_mode_toggle = 0
+    
+#     def getpinchylv(hand_result): return round((Controller.pinchstartycoord - hand_result.landmark[8].y)*10,1)
+#     def getpinchxlv(hand_result): return round((hand_result.landmark[8].x - Controller.pinchstartxcoord)*10,1)
+    
+#     def changesystembrightness():
+#         if IS_MACOS:
+#             if Controller.pinchlv > 0:
+#                 for _ in range(min(int(abs(Controller.pinchlv)) + 1, 3)): os.system("osascript -e 'tell application \"System Events\" to key code 144'")
+#             else:
+#                 for _ in range(min(int(abs(Controller.pinchlv)) + 1, 3)): os.system("osascript -e 'tell application \"System Events\" to key code 145'")
+    
+#     def changesystemvolume():
+#         vol_change = Controller.pinchlv / 50.0 
+#         if IS_MACOS:
+#             try:
+#                 cmd = "osascript -e 'output volume of (get volume settings)'"
+#                 current_vol = int(subprocess.check_output(cmd, shell=True).strip())
+#                 new_vol = int(current_vol + (vol_change * 100))
+#                 os.system(f"osascript -e 'set volume output volume {max(0, min(100, new_vol))}'")
+#             except: pass
+    
+#     def scrollVertical(): pyautogui.scroll(10 if Controller.pinchlv>0.0 else -10)
+#     def scrollHorizontal(): pyautogui.keyDown('shift'); pyautogui.scroll(10 if Controller.pinchlv>0.0 else -10); pyautogui.keyUp('shift')
+
+#     def get_position(hand_result):
+#         point = 9 
+#         raw_x = hand_result.landmark[point].x; raw_y = hand_result.landmark[point].y
+#         wCam, hCam = int(GestureController.CAM_WIDTH), int(GestureController.CAM_HEIGHT)
+#         wScr, hScr = pyautogui.size()
+#         x1 = raw_x * wCam; y1 = raw_y * hCam
+#         x3 = np.interp(x1, (FRAME_REDUCTION, wCam - FRAME_REDUCTION), (0, wScr))
+#         y3 = np.interp(y1, (FRAME_REDUCTION, hCam - FRAME_REDUCTION), (0, hScr))
+#         if Controller.prev_hand is None: Controller.prev_hand = [x3, y3]; return (int(x3), int(y3))
+#         curr_x = Controller.prev_hand[0] + (x3 - Controller.prev_hand[0]) * SMOOTHING_FACTOR
+#         curr_y = Controller.prev_hand[1] + (y3 - Controller.prev_hand[1]) * SMOOTHING_FACTOR
+#         Controller.prev_hand = [curr_x, curr_y]
+#         return (int(curr_x), int(curr_y))
+
+#     def pinch_control_init(hand_result):
+#         Controller.pinchstartxcoord = hand_result.landmark[8].x; Controller.pinchstartycoord = hand_result.landmark[8].y
+#         Controller.pinchlv = 0; Controller.prevpinchlv = 0; Controller.framecount = 0
+
+#     def pinch_control(hand_result, controlHorizontal, controlVertical):
+#         if Controller.framecount == 5:
+#             Controller.framecount = 0; Controller.pinchlv = Controller.prevpinchlv
+#             if Controller.pinchdirectionflag == True: controlHorizontal()
+#             elif Controller.pinchdirectionflag == False: controlVertical()
+#         lvx =  Controller.getpinchxlv(hand_result); lvy =  Controller.getpinchylv(hand_result)
+#         if abs(lvy) > abs(lvx) and abs(lvy) > Controller.pinch_threshold:
+#             Controller.pinchdirectionflag = False
+#             if abs(Controller.prevpinchlv - lvy) < Controller.pinch_threshold: Controller.framecount += 1
+#             else: Controller.prevpinchlv = lvy; Controller.framecount = 0
+#         elif abs(lvx) > Controller.pinch_threshold:
+#             Controller.pinchdirectionflag = True
+#             if abs(Controller.prevpinchlv - lvx) < Controller.pinch_threshold: Controller.framecount += 1
+#             else: Controller.prevpinchlv = lvx; Controller.framecount = 0
+
+#     def handle_controls(gesture, hand_result):  
+#         x,y = None,None
+#         if gesture != Gest.PALM : x,y = Controller.get_position(hand_result)
+#         if gesture != Gest.FIST and Controller.grabflag: Controller.grabflag = False; pyautogui.mouseUp(button = "left")
+#         if gesture != Gest.PINCH_MAJOR and Controller.pinchmajorflag: Controller.pinchmajorflag = False
+#         if gesture != Gest.PINCH_MINOR and Controller.pinchminorflag: Controller.pinchminorflag = False
+
+#         if gesture == Gest.V_GEST: Controller.flag = True; pyautogui.moveTo(x, y, duration = 0)
+#         elif gesture == Gest.INDEX and Controller.flag: pyautogui.click(); Controller.flag = False 
+#         elif gesture == Gest.MID and Controller.flag: pyautogui.click(button='right'); Controller.flag = False 
+#         elif gesture == Gest.FIST:
+#             if not Controller.grabflag : Controller.grabflag = True; pyautogui.mouseDown(button = "left")
+#             pyautogui.moveTo(x, y, duration = 0)
+#         elif gesture == Gest.TWO_FINGER_CLOSED and Controller.flag: pyautogui.doubleClick(); Controller.flag = False
+#         elif gesture == Gest.PINKY:
+#             if time.time() - Controller.last_screenshot_time > 2.0: pyautogui.hotkey('command', 'shift', '3'); Controller.last_screenshot_time = time.time()
+#         elif gesture == Gest.THREE_FINGER:
+#              if time.time() - Controller.last_app_switch_time > 2.0: pyautogui.hotkey('command', 'tab'); Controller.last_app_switch_time = time.time()
+#         elif gesture == Gest.PINCH_MINOR:
+#             if Controller.pinchminorflag == False: Controller.pinch_control_init(hand_result); Controller.pinchminorflag = True
+#             Controller.pinch_control(hand_result,Controller.scrollHorizontal, Controller.scrollVertical)
+#         elif gesture == Gest.PINCH_MAJOR:
+#             if Controller.pinchmajorflag == False: Controller.pinch_control_init(hand_result); Controller.pinchmajorflag = True
+#             Controller.pinch_control(hand_result,Controller.changesystembrightness, Controller.changesystemvolume)
+
+# # --- PHASE 2 CLASS (Sign Language Engine) ---
+# class ISLEngine:
+#     def __init__(self, model_path, labels_path):
+#         print(f"[ISL] Loading model from {model_path}...")
+#         try:
+#             # Load TFLite Model
+#             self.interpreter = Interpreter(model_path=model_path)
+#             self.interpreter.allocate_tensors()
+#             self.input_details = self.interpreter.get_input_details()
+#             self.output_details = self.interpreter.get_output_details()
+            
+#             # Load Labels
+#             self.labels_map = np.load(labels_path, allow_pickle=True).item()
+#             # Invert map: {0: 'Hello', 1: 'Help'}
+#             self.id_to_label = {v: k for k, v in self.labels_map.items()}
+#             print("[ISL] Brain Loaded Successfully.")
+#             self.is_loaded = True
+#         except Exception as e:
+#             print(f"[ISL] ERROR: Could not load model. {e}")
+#             self.is_loaded = False
+
+#     def extract_features(self, results):
+#         # EXACT SAME LOGIC AS DATA_EXTRACTOR.PY
+#         if results.pose_landmarks:
+#             pose = np.array([[res.x, res.y, res.z] for res in results.pose_landmarks.landmark[:24]]).flatten()
+#         else: pose = np.zeros(24 * 3)
+#         if results.left_hand_landmarks:
+#             lh = np.array([[res.x, res.y, res.z] for res in results.left_hand_landmarks.landmark]).flatten()
+#         else: lh = np.zeros(21 * 3)
+#         if results.right_hand_landmarks:
+#             rh = np.array([[res.x, res.y, res.z] for res in results.right_hand_landmarks.landmark]).flatten()
+#         else: rh = np.zeros(21 * 3)
+#         return np.concatenate([pose, lh, rh])
+
+#     def predict(self, sequence_buffer):
+#         if not self.is_loaded: return "Model Error", 0.0
+        
+#         # Prepare Data
+#         input_data = np.expand_dims(sequence_buffer, axis=0).astype(np.float32)
+        
+#         # Inference
+#         self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
+#         self.interpreter.invoke()
+#         output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
+        
+#         # Result
+#         prediction_id = np.argmax(output_data)
+#         confidence = np.max(output_data)
+        
+#         predicted_word = self.id_to_label.get(prediction_id, "Unknown")
+#         return predicted_word, confidence
+
+# # --- MAIN CONTROLLER ---
+# class GestureController:
+#     gc_mode = 1
+#     cap = None; is_signing_mode = False 
+#     sequence_buffer = []; CAM_WIDTH = 0; CAM_HEIGHT = 0
+    
+#     def __init__(self):
+#         print("[INIT] Launching GestureController...")
+#         GestureController.sequence_buffer = collections.deque(maxlen=30) # 30 Frames Window
+
+#         # Initialize ISL Engine
+#         self.isl_engine = ISLEngine(MODEL_PATH, LABELS_PATH)
+
+#         GestureController.cap = cv2.VideoCapture(0)
+#         if not GestureController.cap.isOpened(): GestureController.cap = cv2.VideoCapture(1)
+#         GestureController.cap.set(3, 640); GestureController.cap.set(4, 480)
+#         GestureController.CAM_WIDTH = GestureController.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+#         GestureController.CAM_HEIGHT = GestureController.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+
+#     def toggle_mode(self):
+#         # Debounce toggle (prevents double switching)
+#         if time.time() - Controller.last_sign_mode_toggle > 1.0:
+#             GestureController.is_signing_mode = not GestureController.is_signing_mode
+#             Controller.last_sign_mode_toggle = time.time()
+#             mode_text = "SIGN LANGUAGE" if GestureController.is_signing_mode else "MOUSE CONTROL"
+#             print(f"[MODE SWITCH] Now in: {mode_text}")
+#             # Optional: Speak mode change via Jarvis logic (if connected) or just system beep
+#             os.system('tput bel') 
+
+#     def start(self):
+#         handmajor = HandRecog(HLabel.MAJOR); handminor = HandRecog(HLabel.MINOR)
+
+#         with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
+#             while GestureController.cap.isOpened() and GestureController.gc_mode:
+#                 success, image = GestureController.cap.read()
+#                 if not success: continue
+                
+#                 image = cv2.flip(image, 1)
+                
+#                 # --- KEYBOARD SHORTCUT TO TOGGLE MODES (Press 'q') ---
+#                 # In final version, this can be a specific gesture
+#                 key = cv2.waitKey(5) & 0xFF
+#                 if key == ord('q'): self.toggle_mode()
+#                 if key == 13: break # Enter to exit
+
+#                 image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+#                 image_rgb.flags.writeable = False
+#                 results = holistic.process(image_rgb)
+#                 image_rgb.flags.writeable = True
+
+#                 # --- MODE 1: MOUSE CONTROL ---
+#                 if not GestureController.is_signing_mode:
+#                     # Draw Active Zone
+#                     cv2.rectangle(image, (FRAME_REDUCTION, FRAME_REDUCTION), 
+#                                   (int(GestureController.CAM_WIDTH) - FRAME_REDUCTION, int(GestureController.CAM_HEIGHT) - FRAME_REDUCTION), 
+#                                   (255, 0, 255), 2)
+                    
+#                     mouse_hand = results.left_hand_landmarks if PRIMARY_HAND == "Left" else results.right_hand_landmarks
+#                     secondary_hand = results.right_hand_landmarks if PRIMARY_HAND == "Left" else results.left_hand_landmarks
+
+#                     if mouse_hand:
+#                         handmajor.update_hand_result(mouse_hand)
+#                         handmajor.set_finger_state()
+#                         gest_name = handmajor.get_gesture()
+#                         Controller.handle_controls(gest_name, handmajor.hand_result)
+#                         mp_drawing.draw_landmarks(image, mouse_hand, mp_holistic.HAND_CONNECTIONS)
+                    
+#                     if secondary_hand:
+#                         handminor.update_hand_result(secondary_hand)
+#                         handminor.set_finger_state()
+#                         gest_name = handminor.get_gesture()
+#                         if gest_name == Gest.PINCH_MINOR or gest_name == Gest.PINCH_MAJOR:
+#                              Controller.handle_controls(gest_name, handminor.hand_result)
+#                         mp_drawing.draw_landmarks(image, secondary_hand, mp_holistic.HAND_CONNECTIONS)
+
+#                 # --- MODE 2: SIGN LANGUAGE ---
+#                 else:
+#                     # UI Indicator
+#                     cv2.rectangle(image, (0,0), (640, 60), (0,0,0), -1)
+#                     cv2.putText(image, "SIGN MODE (Press 'q' to exit)", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    
+#                     # Draw Skeleton
+#                     mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
+#                     mp_drawing.draw_landmarks(image, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+#                     mp_drawing.draw_landmarks(image, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+
+#                     # Collection & Inference
+#                     if results.pose_landmarks: # Only record if body is visible
+#                         keypoints = self.isl_engine.extract_features(results)
+#                         GestureController.sequence_buffer.append(keypoints)
+                        
+#                         if len(GestureController.sequence_buffer) == 30:
+#                             word, conf = self.isl_engine.predict(GestureController.sequence_buffer)
+                            
+#                             # Display Prediction
+#                             color = (0, 255, 0) if conf > CONFIDENCE_THRESHOLD else (0, 0, 255)
+#                             label_text = f"{word} ({int(conf*100)}%)"
+#                             cv2.putText(image, label_text, (20, 450), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+                            
+#                             if conf > CONFIDENCE_THRESHOLD:
+#                                 print(f"[DETECTED] {word}")
+#                                 # In Phase 3, we will send this 'word' to Jarvis to speak out loud.
+
+#                 cv2.imshow('Gesture Controller', image)
+                    
+#         GestureController.cap.release()
+#         cv2.destroyAllWindows()
+
+# if __name__ == "__main__":
+#     gc = GestureController()
+#     gc.start()
+
+
+#! fixed for the inlcude-50 dataset model trained 
+
+import cv2
+import mediapipe as mp
+import pyautogui
+import math
+import platform
+import os
+import subprocess
+import time
+import numpy as np
+import collections
+from enum import IntEnum
+
+# --- DEPENDENCIES ---
+try:
+    import tensorflow as tf
+    Interpreter = tf.lite.Interpreter
+except ImportError:
+    from tflite_runtime.interpreter import Interpreter
+
+# --- CONFIGURATION ---
+PRIMARY_HAND = "Left" 
+SMOOTHING_FACTOR = 0.15      # Increased smoothing for stable mouse
+FRAME_REDUCTION = 100  
+CONFIDENCE_THRESHOLD = 0.75  # RAISED: Only speak if 85% sure
+PREDICTION_STABILITY = 3     # NEW: Must see word 5 times to confirm
+MODEL_PATH = "models/production/ISL_Model.tflite"
+LABELS_PATH = "data/processed/labels.npy"
+
+# --- MACOS SETUP ---
+IS_MACOS = platform.system() == "Darwin"
+pyautogui.FAILSAFE = False
+mp_drawing = mp.solutions.drawing_utils
+mp_holistic = mp.solutions.holistic
+
+# --- PHASE 1: MOUSE UTILS ---
+class Gest(IntEnum):
+    FIST = 0; PINKY = 1; RING = 2; MID = 4; LAST3 = 7; INDEX = 8; FIRST2 = 12
+    THREE_FINGER = 14; LAST4 = 15; THUMB = 16; PALM = 31; V_GEST = 33
+    TWO_FINGER_CLOSED = 34; PINCH_MAJOR = 35; PINCH_MINOR = 36
+
+class HLabel(IntEnum): MINOR = 0; MAJOR = 1
+
+class HandRecog:
+    def __init__(self, hand_label):
+        self.finger = 0; self.ori_gesture = Gest.PALM; self.prev_gesture = Gest.PALM
+        self.frame_count = 0; self.hand_result = None; self.hand_label = hand_label
+    
+    def update_hand_result(self, hand_result): self.hand_result = hand_result
+
+    def get_signed_dist(self, point):
+        sign = -1
+        if self.hand_result.landmark[point[0]].y < self.hand_result.landmark[point[1]].y: sign = 1
+        dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
+        dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
+        return math.sqrt(dist)*sign
+    
+    def get_dist(self, point):
+        dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
+        dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
+        return math.sqrt(dist)
+    
+    def get_dz(self,point): return abs(self.hand_result.landmark[point[0]].z - self.hand_result.landmark[point[1]].z)
+    
+    def set_finger_state(self):
+        if self.hand_result == None: return
+        points = [[8,5,0],[12,9,0],[16,13,0],[20,17,0]]
+        self.finger = 0
+        for idx,point in enumerate(points):
+            dist = self.get_signed_dist(point[:2])
+            dist2 = self.get_signed_dist(point[1:])
+            try: ratio = round(dist/dist2,1)
+            except: ratio = round(dist/0.01,1)
+            self.finger = self.finger << 1
+            if ratio > 0.5 : self.finger = self.finger | 1
+    
+    def get_gesture(self):
+        if self.hand_result == None: return Gest.PALM
+        current_gesture = Gest.PALM
+        
+        # DISTANCE BASED CLICKING (More Stable)
+        # Pinch Major (Index + Thumb) -> Left Click
+        if self.get_dist([8,4]) < 0.05:
+            current_gesture = Gest.PINCH_MAJOR
+        # Pinch Minor (Middle + Thumb) -> Right Click (NEW)
+        elif self.get_dist([12,4]) < 0.05:
+            current_gesture = Gest.PINCH_MINOR
+        
+        elif Gest.FIRST2 == self.finger:
+            point = [[8,12],[5,9]]
+            dist1 = self.get_dist(point[0]); dist2 = self.get_dist(point[1]); ratio = dist1/dist2
+            if ratio > 1.7: current_gesture = Gest.V_GEST
+            else:
+                if self.get_dz([8,12]) < 0.1: current_gesture = Gest.TWO_FINGER_CLOSED
+                else: current_gesture = Gest.MID
+        else: current_gesture = self.finger
+        
+        if current_gesture == self.prev_gesture: self.frame_count += 1
+        else: self.frame_count = 0
+        self.prev_gesture = current_gesture
+        if self.frame_count > 4 : self.ori_gesture = current_gesture
+        return self.ori_gesture
+
+class Controller:
+    tx_old = 0; ty_old = 0; flag = False; grabflag = False; pinchmajorflag = False; pinchminorflag = False
+    pinchstartxcoord = None; pinchstartycoord = None; pinchdirectionflag = None
+    prevpinchlv = 0; pinchlv = 0; framecount = 0; prev_hand = None; pinch_threshold = 0.3
+    last_click_time = 0
+
+    def get_position(hand_result):
+        point = 9 
+        raw_x = hand_result.landmark[point].x; raw_y = hand_result.landmark[point].y
+        wCam, hCam = int(GestureController.CAM_WIDTH), int(GestureController.CAM_HEIGHT)
+        wScr, hScr = pyautogui.size()
+        x1 = raw_x * wCam; y1 = raw_y * hCam
+        x3 = np.interp(x1, (FRAME_REDUCTION, wCam - FRAME_REDUCTION), (0, wScr))
+        y3 = np.interp(y1, (FRAME_REDUCTION, hCam - FRAME_REDUCTION), (0, hScr))
+        
+        if Controller.prev_hand is None: Controller.prev_hand = [x3, y3]; return (int(x3), int(y3))
+        
+        # Exponential Smoothing
+        curr_x = Controller.prev_hand[0] + (x3 - Controller.prev_hand[0]) * SMOOTHING_FACTOR
+        curr_y = Controller.prev_hand[1] + (y3 - Controller.prev_hand[1]) * SMOOTHING_FACTOR
+        Controller.prev_hand = [curr_x, curr_y]
+        return (int(curr_x), int(curr_y))
+
+    def handle_controls(gesture, hand_result):  
+        x,y = None,None
+        if gesture != Gest.PALM : x,y = Controller.get_position(hand_result)
+        
+        # RESET FLAGS
+        if gesture != Gest.FIST and Controller.grabflag: 
+            Controller.grabflag = False; pyautogui.mouseUp(button = "left")
+        if gesture != Gest.PINCH_MAJOR and Controller.pinchmajorflag: 
+            Controller.pinchmajorflag = False; pyautogui.mouseUp(button='left') # Release Drag
+        if gesture != Gest.PINCH_MINOR and Controller.pinchminorflag: 
+            Controller.pinchminorflag = False
+
+        # --- MOUSE MOVEMENT ---
+        if gesture == Gest.V_GEST: # Moving Mode
+            pyautogui.moveTo(x, y, duration = 0)
+        
+        # --- CLICKS ---
+        # LEFT CLICK (Index Pinch)
+        elif gesture == Gest.PINCH_MAJOR:
+            if not Controller.pinchmajorflag:
+                # Debounce: Prevent double clicks
+                if time.time() - Controller.last_click_time > 0.3:
+                    Controller.pinchmajorflag = True
+                    pyautogui.click(button='left')
+                    Controller.last_click_time = time.time()
+                    print("[MOUSE] Left Click")
+        
+        # RIGHT CLICK (Middle Pinch - NEW)
+        elif gesture == Gest.PINCH_MINOR:
+            if not Controller.pinchminorflag:
+                if time.time() - Controller.last_click_time > 0.3:
+                    Controller.pinchminorflag = True
+                    pyautogui.click(button='right')
+                    Controller.last_click_time = time.time()
+                    print("[MOUSE] Right Click")
+
+        # DRAG (Fist)
+        elif gesture == Gest.FIST:
+            if not Controller.grabflag: 
+                Controller.grabflag = True; pyautogui.mouseDown(button = "left")
+            pyautogui.moveTo(x, y, duration = 0)
+
+# --- PHASE 2: AI ENGINE ---
+class ISLEngine:
+    def __init__(self, model_path, labels_path):
+        print(f"[ISL] Loading model from {model_path}...")
+        try:
+            self.interpreter = Interpreter(model_path=model_path)
+            self.interpreter.allocate_tensors()
+            self.input_details = self.interpreter.get_input_details()
+            self.output_details = self.interpreter.get_output_details()
+            self.labels_map = np.load(labels_path, allow_pickle=True).item()
+            self.id_to_label = {v: k for k, v in self.labels_map.items()}
+            self.is_loaded = True
+        except Exception as e:
+            print(f"[ISL] ERROR: {e}")
+            self.is_loaded = False
+
+    def extract_features(self, results):
+        if results.pose_landmarks:
+            pose = np.array([[res.x, res.y, res.z] for res in results.pose_landmarks.landmark[:24]]).flatten()
+        else: pose = np.zeros(24 * 3)
+        if results.left_hand_landmarks:
+            lh = np.array([[res.x, res.y, res.z] for res in results.left_hand_landmarks.landmark]).flatten()
+        else: lh = np.zeros(21 * 3)
+        if results.right_hand_landmarks:
+            rh = np.array([[res.x, res.y, res.z] for res in results.right_hand_landmarks.landmark]).flatten()
+        else: rh = np.zeros(21 * 3)
+        return np.concatenate([pose, lh, rh])
+
+    def predict(self, sequence_buffer):
+        if not self.is_loaded: return "Model Error", 0.0
+        input_data = np.expand_dims(sequence_buffer, axis=0).astype(np.float32)
+        self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
+        self.interpreter.invoke()
+        output_data = self.interpreter.get_tensor(self.output_details[0]['index'])
+        prediction_id = np.argmax(output_data)
+        confidence = np.max(output_data)
+        predicted_word = self.id_to_label.get(prediction_id, "Unknown")
+        return predicted_word, confidence
+
+# --- MAIN CONTROLLER ---
+class GestureController:
+    gc_mode = 1
+    cap = None; is_signing_mode = False 
+    sequence_buffer = []; CAM_WIDTH = 0; CAM_HEIGHT = 0
+    
+    # NEW: Stability Variables
+    last_predictions = collections.deque(maxlen=PREDICTION_STABILITY)
+    current_display_word = ""
+    display_timer = 0
+    
+    def __init__(self):
+        print("[INIT] Launching GestureController...")
+        GestureController.sequence_buffer = collections.deque(maxlen=30) 
+        self.isl_engine = ISLEngine(MODEL_PATH, LABELS_PATH)
+        GestureController.cap = cv2.VideoCapture(0)
+        GestureController.cap.set(3, 640); GestureController.cap.set(4, 480)
+        GestureController.CAM_WIDTH = GestureController.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
+        GestureController.CAM_HEIGHT = GestureController.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+
+    def toggle_mode(self):
+        GestureController.is_signing_mode = not GestureController.is_signing_mode
+        print(f"[MODE] {'SIGN LANGUAGE' if GestureController.is_signing_mode else 'MOUSE CONTROL'}")
+
+    def start(self):
+        handmajor = HandRecog(HLabel.MAJOR)
+        
+        with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
+            while GestureController.cap.isOpened():
+                success, image = GestureController.cap.read()
+                if not success: continue
+                image = cv2.flip(image, 1)
+                
+                key = cv2.waitKey(5) & 0xFF
+                if key == ord('q'): self.toggle_mode()
+                if key == 27: break # ESC to exit
+
+                image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                results = holistic.process(image_rgb)
+
+                # --- MODE 1: MOUSE ---
+                if not GestureController.is_signing_mode:
+                    # Draw UI Box
+                    cv2.rectangle(image, (FRAME_REDUCTION, FRAME_REDUCTION), 
+                                  (int(GestureController.CAM_WIDTH) - FRAME_REDUCTION, int(GestureController.CAM_HEIGHT) - FRAME_REDUCTION), 
+                                  (255, 0, 255), 2)
+                    
+                    mouse_hand = results.left_hand_landmarks if PRIMARY_HAND == "Left" else results.right_hand_landmarks
+                    if mouse_hand:
+                        handmajor.update_hand_result(mouse_hand)
+                        handmajor.set_finger_state()
+                        gest_name = handmajor.get_gesture()
+                        Controller.handle_controls(gest_name, handmajor.hand_result)
+                        mp_drawing.draw_landmarks(image, mouse_hand, mp_holistic.HAND_CONNECTIONS)
+
+                # --- MODE 2: SIGN LANGUAGE ---
+                else:
+                    # UI Overlay
+                    cv2.rectangle(image, (0,0), (640, 60), (0,0,0), -1)
+                    cv2.putText(image, "SIGN MODE (Press 'q' to exit)", (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+                    
+                    # Draw Skeleton (Visual Feedback)
+                    mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
+                    mp_drawing.draw_landmarks(image, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+                    mp_drawing.draw_landmarks(image, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+
+                    if results.pose_landmarks:
+                        keypoints = self.isl_engine.extract_features(results)
+                        GestureController.sequence_buffer.append(keypoints)
+                        
+                        if len(GestureController.sequence_buffer) == 30:
+                            word, conf = self.isl_engine.predict(GestureController.sequence_buffer)
+                            
+                            # --- STABILIZER LOGIC ---
+                            if conf > CONFIDENCE_THRESHOLD:
+                                self.last_predictions.append(word)
+                                # Check if last 5 predictions are the same
+                                if len(self.last_predictions) == PREDICTION_STABILITY:
+                                    if all(p == word for p in self.last_predictions):
+                                        if self.current_display_word != word:
+                                            self.current_display_word = word
+                                            self.display_timer = time.time()
+                                            print(f"[DETECTED]: {word}")  # This triggers Jarvis
+                            else:
+                                self.last_predictions.append("Unknown")
+
+                    # Display Stable Word for 2 seconds
+                    if time.time() - self.display_timer < 2.0:
+                        cv2.putText(image, self.current_display_word, (20, 450), 
+                                  cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 0), 3)
+
+                cv2.imshow('Gesture Controller', image)
+                    
+        GestureController.cap.release()
+        cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    gc = GestureController()
+    gc.start()

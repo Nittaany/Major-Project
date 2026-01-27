@@ -62,3 +62,4 @@ models/experiments/
 #files:
 src/Gesture_Controller copy.py
 models/production/ISL_Model-0.tflite
+logs/
