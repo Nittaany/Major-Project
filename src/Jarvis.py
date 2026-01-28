@@ -606,13 +606,13 @@ def respond(voice_data):
         reply('Starting Gesture System...')
         try:
             # Kill any existing process
-            os.system("pkill -f Gesture_Controller.py")
+            os.system("pkill -f app.py")
             time.sleep(0.5)
             
             # Launch new process
             gesture_process = subprocess.Popen([
                 sys.executable, 
-                'src/Gesture_Controller.py'
+                'src/app.py.py'
             ])
             reply('Gesture system launched successfully')
         except Exception as e:
@@ -624,7 +624,7 @@ def respond(voice_data):
             if gesture_process:
                 gesture_process.terminate()
                 gesture_process = None
-            os.system("pkill -f Gesture_Controller.py")
+            os.system("pkill -f app.py")
             reply('Gesture system stopped')
         except Exception as e:
             reply(f'Error stopping gesture system: {str(e)}')
@@ -674,7 +674,7 @@ def respond(voice_data):
     elif 'exit' in voice_data or 'terminate' in voice_data:
         if gesture_process:
             gesture_process.terminate()
-        os.system("pkill -f Gesture_Controller.py")
+        os.system("pkill -f app.py")
         app.ChatBot.close()
         sys.exit()
     
