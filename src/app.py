@@ -69,16 +69,11 @@
 
 
 #! modulation
-
 import cv2
 import numpy as np
 import multiprocessing as mp
 from multiprocessing import shared_memory
 import time
-import platform
-import sys
-
-# Import Controllers
 from controllers.HCI_Controller import run_hci
 from controllers.ISL_Controller import run_isl
 
@@ -87,75 +82,80 @@ def main():
     CHANNELS = 3
     FRAME_SHAPE = (HEIGHT, WIDTH, CHANNELS)
     FRAME_SIZE = int(np.prod(FRAME_SHAPE))
-    DTYPE = np.uint8
+    FRAME_REDUCTION = 100 # Match this with HCI Controller
 
     print(f"[SYSTEM] Initializing Phase 3 Modular System...")
 
-    # 1. SHARED MEMORY
     try:
         shm = shared_memory.SharedMemory(create=True, size=FRAME_SIZE)
     except FileExistsError:
-        print("[ERROR] Memory exists. Unlinking...")
-        # Emergency cleanup if previous run crashed
-        temp = shared_memory.SharedMemory(name=None, size=FRAME_SIZE) # Try to find it? No, just warn.
-        print("Please run this command in terminal: rm /dev/shm/*") 
-        return
+        temp = shared_memory.SharedMemory(name=None, size=FRAME_SIZE) 
+        temp.unlink()
+        shm = shared_memory.SharedMemory(create=True, size=FRAME_SIZE)
 
-    # 2. SYNC
     frame_ready = mp.Event()
     stop_event = mp.Event()
     isl_result_queue = mp.Queue()
+    mode_flag = mp.Value('i', 0) 
 
-    # 3. SPAWN PROCESSES
-    p_hci = mp.Process(target=run_hci, args=(shm.name, FRAME_SHAPE, frame_ready, stop_event))
-    p_isl = mp.Process(target=run_isl, args=(shm.name, FRAME_SHAPE, frame_ready, stop_event, isl_result_queue))
+    p_hci = mp.Process(target=run_hci, args=(shm.name, FRAME_SHAPE, frame_ready, stop_event, mode_flag))
+    p_isl = mp.Process(target=run_isl, args=(shm.name, FRAME_SHAPE, frame_ready, stop_event, isl_result_queue, mode_flag))
 
     p_hci.start()
     p_isl.start()
 
-    # 4. CAMERA LOOP
     cap = cv2.VideoCapture(0)
-    # Mac Camera Fix
-    if not cap.isOpened():
-        cap = cv2.VideoCapture(1)
-
+    if not cap.isOpened(): cap = cv2.VideoCapture(1)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, WIDTH)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, HEIGHT)
 
-    shared_frame = np.ndarray(FRAME_SHAPE, dtype=DTYPE, buffer=shm.buf)
-
-    print("[SYSTEM] Running. Press 'q' to exit.")
+    shared_frame = np.ndarray(FRAME_SHAPE, dtype=np.uint8, buffer=shm.buf)
+    
+    current_mode_text = "MOUSE MODE"
 
     try:
         while True:
             ret, frame = cap.read()
-            if not ret:
-                continue
-
+            if not ret: continue
             frame = cv2.flip(frame, 1)
 
             # Write to Shared Memory
             np.copyto(shared_frame, frame)
+            frame_ready.set()
             
-            # Signal Children
-            frame_ready.set() 
-            # We DO NOT clear() immediately. This fixes the deadlock.
+            # --- UI VISUALS ---
+            color = (0, 255, 0) if mode_flag.value == 0 else (0, 0, 255)
             
-            # UI Feedback
+            # 1. Mode Text
+            cv2.putText(frame, f"MODE: {current_mode_text} (Press Q)", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            
+            # 2. Active Zone Box (Only in Mouse Mode)
+            if mode_flag.value == 0:
+                cv2.rectangle(frame, (FRAME_REDUCTION, FRAME_REDUCTION), 
+                              (WIDTH - FRAME_REDUCTION, HEIGHT - FRAME_REDUCTION), 
+                              (255, 0, 255), 2)
+
+            # 3. ISL Text
+            if not isl_result_queue.empty():
+                word = isl_result_queue.get()
+                cv2.putText(frame, f"ISL: {word}", (10, 650), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 0, 0), 3)
+
             cv2.imshow("Jarvis Master Feed", frame)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                with mode_flag.get_lock():
+                    mode_flag.value = 1 - mode_flag.value
+                    current_mode_text = "ISL MODE" if mode_flag.value == 1 else "MOUSE MODE"
+                    print(f"[SYSTEM] Switched to {current_mode_text}")
             
-            # FPS Control (Crucial for Sync)
+            if key == 27: break
+            
             time.sleep(0.01) 
-            frame_ready.clear() # Clear after sleep ensures children had time to see it.
+            frame_ready.clear()
 
-    except KeyboardInterrupt:
-        print("[SYSTEM] Interrupt")
-
+    except KeyboardInterrupt: pass
     finally:
-        print("[SYSTEM] Stopping...")
         stop_event.set()
         p_hci.join()
         p_isl.join()
@@ -163,7 +163,6 @@ def main():
         cv2.destroyAllWindows()
         shm.close()
         shm.unlink()
-        print("[SYSTEM] Cleanup Done.")
 
 if __name__ == "__main__":
     mp.set_start_method('spawn', force=True)

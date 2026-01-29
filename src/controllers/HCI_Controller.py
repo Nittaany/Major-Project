@@ -2,220 +2,239 @@ import mediapipe as mp
 import pyautogui
 import numpy as np
 import time
-import cv2
 import math
-from enum import IntEnum
+import cv2
 from multiprocessing import shared_memory
-from utils.math_utils import SigmoidController
+from enum import Enum, auto
 
-# --- CONFIGURATION ---
-pyautogui.FAILSAFE = False # Prevent crash at corners
-SMOOTHING = 0.5            # 0.0 to 1.0 (Higher = Smoother but laggier)
-CLICK_THRESHOLD = 0.05     # Distance to trigger click
+# ═══════════════════════════════════════════════════════════════════
+# 1. CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════
+pyautogui.FAILSAFE = False
+SCREEN_W, SCREEN_H = pyautogui.size()
 
-# --- ENUMS (Restored from your original code) ---
-class Gest(IntEnum):
-    FIST = 0
-    PINKY = 1
-    RING = 2
-    MID = 4
-    LAST3 = 7
-    INDEX = 8
-    FIRST2 = 12
-    THREE_FINGER = 14
-    LAST4 = 15
-    THUMB = 16    
-    PALM = 31
-    V_GEST = 33
-    TWO_FINGER_CLOSED = 34
-    PINCH_MAJOR = 35
-    PINCH_MINOR = 36
+# Sensitivity
+FRAME_REDUCTION = 100    # Pixels from camera edge to ignore (The "Comfort Zone")
+CLICK_THRESHOLD = 0.04   # How close thumb/finger need to be to click
+SMOOTHING = 5.0          # OneEuroFilter Beta (Higher = Less Lag, Lower = Smoother)
 
-class HLabel(IntEnum):
-    MINOR = 0
-    MAJOR = 1
+# ═══════════════════════════════════════════════════════════════════
+# 2. HELPER: OneEuroFilter (Embedded for Stability)
+# ═══════════════════════════════════════════════════════════════════
+class OneEuroFilter:
+    def __init__(self, min_cutoff=0.1, beta=4.0, d_cutoff=1.0):
+        self.min_cutoff = min_cutoff
+        self.beta = beta
+        self.d_cutoff = d_cutoff
+        self.x_prev = None
+        self.dx_prev = 0.0
+        self.t_prev = None
 
-# --- HAND RECOGNITION LOGIC (Restored) ---
-class HandRecog:
-    def __init__(self, hand_label):
-        self.finger = 0
-        self.ori_gesture = Gest.PALM
-        self.prev_gesture = Gest.PALM
-        self.frame_count = 0
-        self.hand_result = None
-        self.hand_label = hand_label
-    
-    def update_hand_result(self, hand_result):
-        self.hand_result = hand_result
+    def exponential_smoothing(self, a, x, x_prev):
+        return a * x + (1 - a) * x_prev
 
-    def get_signed_dist(self, point):
-        sign = -1
-        if self.hand_result.landmark[point[0]].y < self.hand_result.landmark[point[1]].y:
-            sign = 1
-        dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
-        dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
-        return math.sqrt(dist) * sign
-    
-    def get_dist(self, point):
-        dist = (self.hand_result.landmark[point[0]].x - self.hand_result.landmark[point[1]].x)**2
-        dist += (self.hand_result.landmark[point[0]].y - self.hand_result.landmark[point[1]].y)**2
-        return math.sqrt(dist)
-    
-    def get_dz(self, point):
-        return abs(self.hand_result.landmark[point[0]].z - self.hand_result.landmark[point[1]].z)
-    
-    def set_finger_state(self):
-        if self.hand_result == None: return
-        points = [[8,5,0],[12,9,0],[16,13,0],[20,17,0]]
-        self.finger = 0
-        for idx, point in enumerate(points):
-            dist = self.get_signed_dist(point[:2])
-            dist2 = self.get_signed_dist(point[1:])
-            try: ratio = round(dist/dist2,1)
-            except: ratio = round(dist/0.01,1)
-            self.finger = self.finger << 1
-            if ratio > 0.5 : self.finger = self.finger | 1
-    
-    def get_gesture(self):
-        if self.hand_result == None: return Gest.PALM
-        current_gesture = Gest.PALM
+    def filter(self, x, t):
+        if self.x_prev is None:
+            self.x_prev = x
+            self.t_prev = t
+            return x
         
-        # Pinch Logic
-        if self.finger in [Gest.LAST3, Gest.LAST4] and self.get_dist([8,4]) < CLICK_THRESHOLD:
-            if self.hand_label == HLabel.MINOR: current_gesture = Gest.PINCH_MINOR
-            else: current_gesture = Gest.PINCH_MAJOR
+        t_e = t - self.t_prev
+        if t_e <= 0: return self.x_prev
         
-        elif Gest.FIRST2 == self.finger:
-            point = [[8,12],[5,9]]
-            dist1 = self.get_dist(point[0]); dist2 = self.get_dist(point[1])
-            ratio = dist1/dist2
-            if ratio > 1.7: current_gesture = Gest.V_GEST
-            else:
-                if self.get_dz([8,12]) < 0.1: current_gesture = Gest.TWO_FINGER_CLOSED
-                else: current_gesture = Gest.MID
-        else:
-            current_gesture = self.finger
+        # Jitter reduction
+        dx = (x - self.x_prev) / t_e
+        a_d = 2 * math.pi * self.d_cutoff * t_e / (2 * math.pi * self.d_cutoff * t_e + 1)
+        dx_hat = self.exponential_smoothing(a_d, dx, self.dx_prev)
         
-        if current_gesture == self.prev_gesture: self.frame_count += 1
-        else: self.frame_count = 0
-        self.prev_gesture = current_gesture
+        # Lag reduction
+        cutoff = self.min_cutoff + self.beta * abs(dx_hat)
+        a = 2 * math.pi * cutoff * t_e / (2 * math.pi * cutoff * t_e + 1)
+        x_hat = self.exponential_smoothing(a, x, self.x_prev)
         
-        if self.frame_count > 4: self.ori_gesture = current_gesture
-        return self.ori_gesture
+        self.x_prev = x_hat
+        self.dx_prev = dx_hat
+        self.t_prev = t
+        return x_hat
 
-# --- MAIN PROCESS ---
-def run_hci(shm_name, shape, frame_ready_event, stop_event):
-    print("[HCI] Process Started. Waiting for frames...")
+# ═══════════════════════════════════════════════════════════════════
+# 3. GESTURE ENGINE (New & Robust)
+# ═══════════════════════════════════════════════════════════════════
+class Gesture(Enum):
+    NEUTRAL = auto()
+    MOVE = auto()        # Index Up OR V-Sign
+    CLICK_LEFT = auto()  # Pinch Index
+    CLICK_RIGHT = auto() # Pinch Middle
+    DRAG = auto()        # Fist
+    SCREENSHOT = auto()  # Pinky Only
+    APP_SWITCH = auto()  # 3 Fingers
+
+class GestureRecognizer:
+    def __init__(self):
+        self.lm = None
     
+    def calculate_distance(self, p1_idx, p2_idx):
+        x1, y1 = self.lm[p1_idx].x, self.lm[p1_idx].y
+        x2, y2 = self.lm[p2_idx].x, self.lm[p2_idx].y
+        return math.hypot(x2 - x1, y2 - y1)
+
+    def is_finger_up(self, tip_idx, pip_idx):
+        # Y coordinates increase downwards
+        return self.lm[tip_idx].y < self.lm[pip_idx].y
+
+    def detect(self, hand_landmarks):
+        self.lm = hand_landmarks.landmark
+        
+        # 1. Check which fingers are up
+        thumb_out = self.lm[4].x < self.lm[3].x # Rough check for right hand
+        index_up = self.is_finger_up(8, 6)
+        mid_up   = self.is_finger_up(12, 10)
+        ring_up  = self.is_finger_up(16, 14)
+        pinky_up = self.is_finger_up(20, 18)
+
+        # 2. Check Pinches (Distance between Tip and Thumb)
+        pinch_index = self.calculate_distance(8, 4)
+        pinch_mid   = self.calculate_distance(12, 4)
+
+        # --- LOGIC TREE ---
+
+        # A. DRAG (Fist: All fingers down)
+        if not (index_up or mid_up or ring_up or pinky_up):
+            return Gesture.DRAG
+
+        # B. CLICKS (Priority over movement)
+        if pinch_index < CLICK_THRESHOLD:
+            return Gesture.CLICK_LEFT
+        
+        if pinch_mid < CLICK_THRESHOLD:
+            return Gesture.CLICK_RIGHT
+
+        # C. SYSTEM SHORTCUTS
+        # Pinky Only = Screenshot
+        if pinky_up and not (index_up or mid_up or ring_up):
+            return Gesture.SCREENSHOT
+        
+        # 3 Fingers (No Pinky, No Index Pinch) = App Switch
+        if index_up and mid_up and ring_up and not pinky_up:
+            return Gesture.APP_SWITCH
+
+        # D. MOVEMENT (Default if Index is up)
+        if index_up:
+            return Gesture.MOVE
+
+        return Gesture.NEUTRAL
+
+# ═══════════════════════════════════════════════════════════════════
+# 4. MAIN CONTROLLER
+# ═══════════════════════════════════════════════════════════════════
+def run_hci(shm_name, shape, frame_ready_event, stop_event, mode_flag):
+    print("[HCI] Process Started.")
+    
+    # Shared Memory
     try:
         shm = shared_memory.SharedMemory(name=shm_name)
         frame_buffer = np.ndarray(shape, dtype=np.uint8, buffer=shm.buf)
-    except FileNotFoundError:
-        print("[HCI] Error: Shared Memory not found.")
-        return
+    except: return
 
+    # MediaPipe
     mp_hands = mp.solutions.hands
-    hands = mp_hands.Hands(
-        max_num_hands=1,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-        model_complexity=0
-    )
+    hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7, min_tracking_confidence=0.7)
 
-    physics = SigmoidController(min_gain=1.5, max_gain=15.0, v_inf=30, k=0.15)
-    recog = HandRecog(HLabel.MAJOR)
-    
-    # State Variables
-    prev_x, prev_y = 0, 0
-    grab_flag = False
+    # Objects
+    recognizer = GestureRecognizer()
+    filter_x = OneEuroFilter(min_cutoff=0.1, beta=SMOOTHING)
+    filter_y = OneEuroFilter(min_cutoff=0.1, beta=SMOOTHING)
+
+    # State
     last_click_time = 0
-    screen_w, screen_h = pyautogui.size()
-    
-    try:
-        while not stop_event.is_set():
-            if not frame_ready_event.wait(timeout=2.0): continue 
-            
-            # 1. Get Frame
-            current_frame = frame_buffer.copy()
-            rgb_frame = cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB)
-            results = hands.process(rgb_frame)
-            
-            if results.multi_hand_landmarks:
-                hand_landmarks = results.multi_hand_landmarks[0]
-                recog.update_hand_result(hand_landmarks)
-                recog.set_finger_state()
-                gesture = recog.get_gesture()
-                
-                # --- COORDINATE MAPPING (FIXED STICKING) ---
-                # Get Tip of Index Finger
-                lm = hand_landmarks.landmark[8] 
-                h, w, _ = shape
-                cx, cy = int(lm.x * w), int(lm.y * h)
-                
-                # Calculate Ballistics
-                velocity = np.sqrt((cx - prev_x)**2 + (cy - prev_y)**2)
-                gain = physics.get_gain(velocity)
-                
-                dx = (cx - prev_x) * gain
-                dy = (cy - prev_y) * gain
-                
-                # --- GESTURE HANDLING ---
-                
-                # 1. MOVE (V-Gesture)
-                if gesture == Gest.V_GEST:
-                    try:
-                        # Move Relative, but check bounds? 
-                        # Actually, pyautogui.moveRel handles bounds better than moveTo if failsafe is False
-                        pyautogui.moveRel(dx, dy, _pause=False)
-                    except: pass
+    is_dragging = False
+    trigger_lock = False  # Prevents spamming screenshot/app switch
+    cam_h, cam_w, _ = shape
 
-                # 2. LEFT CLICK (Pinch Index/Major)
-                elif gesture == Gest.PINCH_MAJOR:
-                    if time.time() - last_click_time > 0.5:
-                        pyautogui.click()
-                        last_click_time = time.time()
-                        print("[HCI] Left Click")
+    while not stop_event.is_set():
+        if not frame_ready_event.wait(timeout=1.0): continue
+        if mode_flag.value != 0: continue # MOUSE MODE ONLY
 
-                # 3. DRAG (Fist)
-                elif gesture == Gest.FIST:
-                    if not grab_flag:
-                        grab_flag = True
-                        pyautogui.mouseDown()
-                        print("[HCI] Drag Start")
-                    pyautogui.moveRel(dx, dy, _pause=False)
-                
-                # Release Drag if not Fist
-                if gesture != Gest.FIST and grab_flag:
-                    grab_flag = False
+        # Vision Pipeline
+        current_frame = frame_buffer.copy()
+        rgb = cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB)
+        results = hands.process(rgb)
+        
+        # Visual Debug Text
+        debug_text = "Searching..."
+
+        if results.multi_hand_landmarks:
+            hand_lm = results.multi_hand_landmarks[0]
+            
+            # 1. Detect Gesture
+            gesture = recognizer.detect(hand_lm)
+            debug_text = gesture.name
+            
+            # 2. Reset Locks if Neutral
+            if gesture == Gesture.NEUTRAL or gesture == Gesture.MOVE:
+                trigger_lock = False
+                if is_dragging:
                     pyautogui.mouseUp()
-                    print("[HCI] Drag Drop")
+                    is_dragging = False
 
-                # 4. RIGHT CLICK (Middle Finger / Pinch Minor)
-                elif gesture == Gest.MID:
-                    if time.time() - last_click_time > 1.0:
-                        pyautogui.rightClick()
-                        last_click_time = time.time()
-                        print("[HCI] Right Click")
-                        
-                # 5. SCREENSHOT (Pinky)
-                elif gesture == Gest.PINKY:
-                    if time.time() - last_click_time > 2.0:
-                        pyautogui.hotkey('command', 'shift', '3')
-                        last_click_time = time.time()
-                        print("[HCI] Screenshot")
+            # 3. Handle Actions
+            now = time.time()
 
-                # 6. APP SWITCH (Three Fingers)
-                elif gesture == Gest.THREE_FINGER:
-                     if time.time() - last_click_time > 2.0:
-                        pyautogui.hotkey('command', 'tab')
-                        last_click_time = time.time()
-                        print("[HCI] App Switch")
+            if gesture == Gesture.CLICK_LEFT:
+                if now - last_click_time > 0.3: # Debounce
+                    pyautogui.click()
+                    last_click_time = now
 
-                # Update State
-                prev_x, prev_y = cx, cy
+            elif gesture == Gesture.CLICK_RIGHT:
+                 if now - last_click_time > 0.5:
+                    pyautogui.rightClick()
+                    last_click_time = now
+
+            elif gesture == Gesture.DRAG:
+                if not is_dragging:
+                    pyautogui.mouseDown()
+                    is_dragging = True
             
-    except Exception as e:
-        print(f"[HCI] Crash: {e}")
-    finally:
-        shm.close()
-        print("[HCI] Process Stopped")
+            elif gesture == Gesture.SCREENSHOT:
+                if not trigger_lock:
+                    pyautogui.hotkey('command', 'shift', '3') # Mac Screenshot
+                    trigger_lock = True
+            
+            elif gesture == Gesture.APP_SWITCH:
+                if not trigger_lock:
+                    pyautogui.hotkey('command', 'tab')
+                    trigger_lock = True
+
+            # 4. Handle Movement (Only if MOVE or DRAG)
+            if gesture == Gesture.MOVE or gesture == Gesture.DRAG:
+                # Track Index Finger Tip
+                tip = hand_lm.landmark[8]
+                
+                # Raw
+                raw_x, raw_y = int(tip.x * cam_w), int(tip.y * cam_h)
+
+                # Absolute Mapping (Comfort Zone)
+                target_x = np.interp(raw_x, (FRAME_REDUCTION, cam_w - FRAME_REDUCTION), (0, SCREEN_W))
+                target_y = np.interp(raw_y, (FRAME_REDUCTION, cam_h - FRAME_REDUCTION), (0, SCREEN_H))
+
+                # Clamp
+                target_x = np.clip(target_x, 0, SCREEN_W - 2)
+                target_y = np.clip(target_y, 0, SCREEN_H - 2)
+
+                # Filter
+                smooth_x = filter_x.filter(target_x, now)
+                smooth_y = filter_y.filter(target_y, now)
+
+                try: pyautogui.moveTo(smooth_x, smooth_y, _pause=False)
+                except: pass
+
+        # Draw Debug Text onto the Frame (Directly into shared memory for App to see)
+        # Note: We draw on 'current_frame' but we need to write it back? 
+        # Actually, App.py reads shared memory to display. 
+        # Since we are a child process reading the same memory, writing back might tear.
+        # Ideally, we send the status to App.py via Queue, but for now, check the terminal.
+        # OR: We just print to console for safety.
+        # print(f"[HCI] {debug_text}") 
+
+    shm.close()
+    print("[HCI] Stopped")
