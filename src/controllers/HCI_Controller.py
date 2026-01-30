@@ -6,6 +6,7 @@ import math
 import cv2
 from multiprocessing import shared_memory
 from enum import Enum, auto
+from collections import deque
 
 # ═══════════════════════════════════════════════════════════════════
 # 1. CONFIGURATION
@@ -13,16 +14,23 @@ from enum import Enum, auto
 pyautogui.FAILSAFE = False
 SCREEN_W, SCREEN_H = pyautogui.size()
 
-# Sensitivity
-FRAME_REDUCTION = 100    # Pixels from camera edge to ignore (The "Comfort Zone")
-CLICK_THRESHOLD = 0.04   # How close thumb/finger need to be to click
-SMOOTHING = 5.0          # OneEuroFilter Beta (Higher = Less Lag, Lower = Smoother)
+# TRACKPAD PHYSICS
+SENSITIVITY = 1.3       
+SMOOTHING = 1.0         
+
+# GESTURE THRESHOLDS
+PINCH_THRESHOLD = 0.04   # Relaxed slightly (0.03 -> 0.04) for easier clicking
+FIST_THRESHOLD = 0.04    # Distance check for Fist detection
+
+# TIMERS
+CLICK_COOLDOWN = 0.3
+ACTION_COOLDOWN = 1.0
 
 # ═══════════════════════════════════════════════════════════════════
-# 2. HELPER: OneEuroFilter (Embedded for Stability)
+# 2. UTILS: OneEuroFilter
 # ═══════════════════════════════════════════════════════════════════
 class OneEuroFilter:
-    def __init__(self, min_cutoff=0.1, beta=4.0, d_cutoff=1.0):
+    def __init__(self, min_cutoff=0.05, beta=1.0, d_cutoff=1.0):
         self.min_cutoff = min_cutoff
         self.beta = beta
         self.d_cutoff = d_cutoff
@@ -38,16 +46,13 @@ class OneEuroFilter:
             self.x_prev = x
             self.t_prev = t
             return x
-        
         t_e = t - self.t_prev
         if t_e <= 0: return self.x_prev
         
-        # Jitter reduction
         dx = (x - self.x_prev) / t_e
         a_d = 2 * math.pi * self.d_cutoff * t_e / (2 * math.pi * self.d_cutoff * t_e + 1)
         dx_hat = self.exponential_smoothing(a_d, dx, self.dx_prev)
         
-        # Lag reduction
         cutoff = self.min_cutoff + self.beta * abs(dx_hat)
         a = 2 * math.pi * cutoff * t_e / (2 * math.pi * cutoff * t_e + 1)
         x_hat = self.exponential_smoothing(a, x, self.x_prev)
@@ -58,67 +63,85 @@ class OneEuroFilter:
         return x_hat
 
 # ═══════════════════════════════════════════════════════════════════
-# 3. GESTURE ENGINE (New & Robust)
+# 3. GESTURE ENGINE (ERGONOMIC FIX)
 # ═══════════════════════════════════════════════════════════════════
 class Gesture(Enum):
-    NEUTRAL = auto()
-    MOVE = auto()        # Index Up OR V-Sign
-    CLICK_LEFT = auto()  # Pinch Index
-    CLICK_RIGHT = auto() # Pinch Middle
-    DRAG = auto()        # Fist
-    SCREENSHOT = auto()  # Pinky Only
-    APP_SWITCH = auto()  # 3 Fingers
+    NEUTRAL = auto()     
+    MOVE = auto()        
+    CLICK_LEFT = auto()  
+    CLICK_RIGHT = auto() 
+    DRAG = auto()        
+    SCREENSHOT = auto()  
+    APP_SWITCH = auto()  
 
 class GestureRecognizer:
     def __init__(self):
         self.lm = None
-    
-    def calculate_distance(self, p1_idx, p2_idx):
-        x1, y1 = self.lm[p1_idx].x, self.lm[p1_idx].y
-        x2, y2 = self.lm[p2_idx].x, self.lm[p2_idx].y
+
+    def get_dist(self, p1, p2):
+        x1, y1 = self.lm[p1].x, self.lm[p1].y
+        x2, y2 = self.lm[p2].x, self.lm[p2].y
         return math.hypot(x2 - x1, y2 - y1)
 
-    def is_finger_up(self, tip_idx, pip_idx):
-        # Y coordinates increase downwards
-        return self.lm[tip_idx].y < self.lm[pip_idx].y
+    def is_finger_down(self, tip, pip):
+        # Y increases downwards. Tip > PIP means finger is curled.
+        # Threshold 0.0 ensures we don't get false positives on flat hands
+        return self.lm[tip].y > self.lm[pip].y
 
     def detect(self, hand_landmarks):
         self.lm = hand_landmarks.landmark
         
-        # 1. Check which fingers are up
-        thumb_out = self.lm[4].x < self.lm[3].x # Rough check for right hand
-        index_up = self.is_finger_up(8, 6)
-        mid_up   = self.is_finger_up(12, 10)
-        ring_up  = self.is_finger_up(16, 14)
-        pinky_up = self.is_finger_up(20, 18)
+        # Pinch Distances (Thumb vs Tips)
+        dist_index = self.get_dist(4, 8)
+        dist_mid   = self.get_dist(4, 12)
+        dist_ring  = self.get_dist(4, 16)
+        dist_pinky = self.get_dist(4, 20)
 
-        # 2. Check Pinches (Distance between Tip and Thumb)
-        pinch_index = self.calculate_distance(8, 4)
-        pinch_mid   = self.calculate_distance(12, 4)
+        # Finger States (Curled or not)
+        index_up = not self.is_finger_down(8, 6)
+        mid_up   = not self.is_finger_down(12, 10)
+        ring_up  = not self.is_finger_down(16, 14)
+        pinky_up = not self.is_finger_down(20, 18)
 
-        # --- LOGIC TREE ---
+        # --- LOGIC PRIORITY ---
 
-        # A. DRAG (Fist: All fingers down)
-        if not (index_up or mid_up or ring_up or pinky_up):
+        # 1. DRAG (Fist)
+        # Check: All fingers curled AND Thumb is close to fingers (Fist tightness)
+        if not index_up and not mid_up and not ring_up and not pinky_up:
             return Gesture.DRAG
 
-        # B. CLICKS (Priority over movement)
-        if pinch_index < CLICK_THRESHOLD:
-            return Gesture.CLICK_LEFT
-        
-        if pinch_mid < CLICK_THRESHOLD:
-            return Gesture.CLICK_RIGHT
-
-        # C. SYSTEM SHORTCUTS
-        # Pinky Only = Screenshot
-        if pinky_up and not (index_up or mid_up or ring_up):
-            return Gesture.SCREENSHOT
-        
-        # 3 Fingers (No Pinky, No Index Pinch) = App Switch
+        # 2. APP SWITCH (3 Fingers Up)
         if index_up and mid_up and ring_up and not pinky_up:
             return Gesture.APP_SWITCH
 
-        # D. MOVEMENT (Default if Index is up)
+        # 3. SCREENSHOT (Pinky Only)
+        if pinky_up and not index_up and not mid_up and not ring_up:
+            return Gesture.SCREENSHOT
+
+        # 4. CLUTCH (Neutral/Reset)
+        # If hand is open, stop moving.
+        if index_up and mid_up and ring_up:
+            return Gesture.NEUTRAL
+
+        # --- CLICK LOGIC (FIXED) ---
+        
+        # Left Click: Index Pinch
+        # FIX: Removed "mid_up" requirement. 
+        # Instead, we ensure Middle Finger is NOT pinching. 
+        # This allows natural hand relaxation without triggering "Fist".
+        if dist_index < PINCH_THRESHOLD:
+            # Safety: Ensure Middle Finger is not also pinching (which would be a fist/drag)
+            if dist_mid > 0.06: 
+                return Gesture.CLICK_LEFT
+        
+        # Right Click: Middle Pinch
+        if dist_mid < PINCH_THRESHOLD:
+            # Safety: Ensure Index is not pinching
+            if dist_index > 0.06:
+                return Gesture.CLICK_RIGHT
+
+        # 5. MOVE (Pointing)
+        # Standard tracking state
         if index_up:
             return Gesture.MOVE
 
@@ -130,111 +153,105 @@ class GestureRecognizer:
 def run_hci(shm_name, shape, frame_ready_event, stop_event, mode_flag):
     print("[HCI] Process Started.")
     
-    # Shared Memory
     try:
         shm = shared_memory.SharedMemory(name=shm_name)
         frame_buffer = np.ndarray(shape, dtype=np.uint8, buffer=shm.buf)
     except: return
 
-    # MediaPipe
     mp_hands = mp.solutions.hands
     hands = mp_hands.Hands(max_num_hands=1, min_detection_confidence=0.7, min_tracking_confidence=0.7)
-
-    # Objects
     recognizer = GestureRecognizer()
-    filter_x = OneEuroFilter(min_cutoff=0.1, beta=SMOOTHING)
-    filter_y = OneEuroFilter(min_cutoff=0.1, beta=SMOOTHING)
 
-    # State
+    filter_x = OneEuroFilter(min_cutoff=0.01, beta=SMOOTHING)
+    filter_y = OneEuroFilter(min_cutoff=0.01, beta=SMOOTHING)
+
     last_click_time = 0
+    last_action_time = 0
     is_dragging = False
-    trigger_lock = False  # Prevents spamming screenshot/app switch
+    
+    prev_raw_x, prev_raw_y = 0, 0
+    curr_cursor_x, curr_cursor_y = pyautogui.position()
+    first_frame = True
+    
     cam_h, cam_w, _ = shape
 
     while not stop_event.is_set():
         if not frame_ready_event.wait(timeout=1.0): continue
-        if mode_flag.value != 0: continue # MOUSE MODE ONLY
+        if mode_flag.value != 0: continue
 
-        # Vision Pipeline
         current_frame = frame_buffer.copy()
         rgb = cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB)
         results = hands.process(rgb)
         
-        # Visual Debug Text
-        debug_text = "Searching..."
-
         if results.multi_hand_landmarks:
             hand_lm = results.multi_hand_landmarks[0]
-            
-            # 1. Detect Gesture
             gesture = recognizer.detect(hand_lm)
-            debug_text = gesture.name
             
-            # 2. Reset Locks if Neutral
-            if gesture == Gesture.NEUTRAL or gesture == Gesture.MOVE:
-                trigger_lock = False
-                if is_dragging:
-                    pyautogui.mouseUp()
-                    is_dragging = False
+            # Use Index Knuckle (5) for stability
+            lm = hand_lm.landmark[5]
+            raw_x, raw_y = lm.x * cam_w, lm.y * cam_h
+            
+            if first_frame:
+                prev_raw_x, prev_raw_y = raw_x, raw_y
+                first_frame = False
 
-            # 3. Handle Actions
             now = time.time()
 
+            # --- 1. MOVEMENT (Relative) ---
+            if gesture == Gesture.MOVE or gesture == Gesture.DRAG:
+                dx = (raw_x - prev_raw_x) * SENSITIVITY
+                dy = (raw_y - prev_raw_y) * SENSITIVITY
+                
+                curr_cursor_x += dx
+                curr_cursor_y += dy
+                
+                curr_cursor_x = max(0, min(curr_cursor_x, SCREEN_W - 1))
+                curr_cursor_y = max(0, min(curr_cursor_y, SCREEN_H - 1))
+                
+                smooth_x = filter_x.filter(curr_cursor_x, now)
+                smooth_y = filter_y.filter(curr_cursor_y, now)
+                
+                try: pyautogui.moveTo(smooth_x, smooth_y, _pause=False)
+                except: pass
+            
+            # --- 2. ACTIONS ---
             if gesture == Gesture.CLICK_LEFT:
-                if now - last_click_time > 0.3: # Debounce
+                if now - last_click_time > CLICK_COOLDOWN:
                     pyautogui.click()
                     last_click_time = now
-
+                    print("[HCI] Left Click")
+            
             elif gesture == Gesture.CLICK_RIGHT:
-                 if now - last_click_time > 0.5:
+                if now - last_click_time > CLICK_COOLDOWN:
                     pyautogui.rightClick()
                     last_click_time = now
+                    print("[HCI] Right Click")
 
             elif gesture == Gesture.DRAG:
                 if not is_dragging:
                     pyautogui.mouseDown()
                     is_dragging = True
+                    print("[HCI] Drag Start")
             
+            # Drag Release
+            if gesture != Gesture.DRAG and is_dragging:
+                pyautogui.mouseUp()
+                is_dragging = False
+                print("[HCI] Drag Drop")
+
             elif gesture == Gesture.SCREENSHOT:
-                if not trigger_lock:
-                    pyautogui.hotkey('command', 'shift', '3') # Mac Screenshot
-                    trigger_lock = True
-            
+                if now - last_action_time > ACTION_COOLDOWN:
+                    pyautogui.hotkey('command', 'shift', '3')
+                    last_action_time = now
+                    print("[HCI] Screenshot")
+
             elif gesture == Gesture.APP_SWITCH:
-                if not trigger_lock:
+                if now - last_action_time > ACTION_COOLDOWN:
                     pyautogui.hotkey('command', 'tab')
-                    trigger_lock = True
+                    last_action_time = now
+                    print("[HCI] App Switch")
 
-            # 4. Handle Movement (Only if MOVE or DRAG)
-            if gesture == Gesture.MOVE or gesture == Gesture.DRAG:
-                # Track Index Finger Tip
-                tip = hand_lm.landmark[8]
-                
-                # Raw
-                raw_x, raw_y = int(tip.x * cam_w), int(tip.y * cam_h)
-
-                # Absolute Mapping (Comfort Zone)
-                target_x = np.interp(raw_x, (FRAME_REDUCTION, cam_w - FRAME_REDUCTION), (0, SCREEN_W))
-                target_y = np.interp(raw_y, (FRAME_REDUCTION, cam_h - FRAME_REDUCTION), (0, SCREEN_H))
-
-                # Clamp
-                target_x = np.clip(target_x, 0, SCREEN_W - 2)
-                target_y = np.clip(target_y, 0, SCREEN_H - 2)
-
-                # Filter
-                smooth_x = filter_x.filter(target_x, now)
-                smooth_y = filter_y.filter(target_y, now)
-
-                try: pyautogui.moveTo(smooth_x, smooth_y, _pause=False)
-                except: pass
-
-        # Draw Debug Text onto the Frame (Directly into shared memory for App to see)
-        # Note: We draw on 'current_frame' but we need to write it back? 
-        # Actually, App.py reads shared memory to display. 
-        # Since we are a child process reading the same memory, writing back might tear.
-        # Ideally, we send the status to App.py via Queue, but for now, check the terminal.
-        # OR: We just print to console for safety.
-        # print(f"[HCI] {debug_text}") 
-
+            prev_raw_x, prev_raw_y = raw_x, raw_y
+            
     shm.close()
     print("[HCI] Stopped")

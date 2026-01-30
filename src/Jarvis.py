@@ -494,283 +494,169 @@
 #             break
 
 #!updated phase 2.2 jarvis
-"""
-Jarvis - Voice Assistant & System Orchestrator
-Launches Gesture Controller as independent subprocess
-Platform: macOS Silicon
-"""
-
 import pyttsx3
 import speech_recognition as sr
-from datetime import date
-import time
-import webbrowser
 import datetime
-from pynput.keyboard import Key, Controller
-import pyautogui
+import time
 import sys
 import os
-from os import listdir
-from os.path import isfile, join
-import platform
 import subprocess
-import Gesture_Controller
-import app
+import webbrowser
+import platform
 from threading import Thread
+
+# ═══════════════════════════════════════════════════════════════
+# CONFIGURATION
+# ═══════════════════════════════════════════════════════════════
+WAKE_WORD = "jarvis"
+VISUAL_SYSTEM_PATH = "src/app.py" # Points to your new modular app
+IS_MACOS = platform.system() == "Darwin"
 
 # ═══════════════════════════════════════════════════════════════
 # INITIALIZATION
 # ═══════════════════════════════════════════════════════════════
-
-today = date.today()
 r = sr.Recognizer()
-keyboard = Controller()
+is_awake = True
+gesture_process = None 
 
-# TTS Engine
+# TTS Engine Setup
 try:
     engine = pyttsx3.init()
     voices = engine.getProperty('voices')
+    # Use default voice (usually index 0 on Mac)
     engine.setProperty('voice', voices[0].id)
-    print("[JARVIS] TTS Engine initialized")
+    engine.setProperty('rate', 190)
 except Exception as e:
-    print(f"[JARVIS] TTS Warning: {e}")
-
-# Variables
-file_exp_status = False
-files = []
-path = ''
-is_awake = True
-gesture_process = None  # Track subprocess
+    print(f"[TTS ERROR] {e}")
 
 # ═══════════════════════════════════════════════════════════════
-# FUNCTIONS
+# CORE FUNCTIONS
 # ═══════════════════════════════════════════════════════════════
 
-def reply(audio):
-    """Speak and display message"""
-    app.ChatBot.addAppMsg(audio)
-    print(f"[JARVIS] {audio}")
-    engine.say(audio)
+def speak(text):
+    """Speaks text to the user"""
+    print(f"[JARVIS]: {text}")
+    engine.say(text)
     engine.runAndWait()
 
-def wish():
-    """Greet based on time of day"""
+def wish_user():
+    """Greets based on time"""
     hour = int(datetime.datetime.now().hour)
-    if hour >= 0 and hour < 12:
-        reply("Good Morning!")
-    elif hour >= 12 and hour < 18:
-        reply("Good Afternoon!")   
+    if 0 <= hour < 12:
+        speak("Good Morning.")
+    elif 12 <= hour < 18:
+        speak("Good Afternoon.")
     else:
-        reply("Good Evening!")  
-    reply("I am Jarvis. Online and ready sir!")
+        speak("Good Evening.")
+    speak("I am Online. Ready to launch the system.")
 
-def record_audio():
-    """Capture voice input"""
+def listen():
+    """Listens for commands"""
     with sr.Microphone() as source:
         r.pause_threshold = 0.8
-        voice_data = ''
+        r.energy_threshold = 300 
+        print("[LISTENING]...")
         try:
+            # Adjust for ambient noise (critical for Mac mics)
             r.adjust_for_ambient_noise(source, duration=0.5)
-            print("[JARVIS] Listening...")
             audio = r.listen(source, phrase_time_limit=5)
-            voice_data = r.recognize_google(audio)
-        except sr.RequestError:
-            reply('Sorry, my service is down. Please check your internet.')
+            query = r.recognize_google(audio, language='en-in')
+            print(f"[USER]: {query}")
+            return query.lower()
         except sr.UnknownValueError:
-            pass
-        return voice_data.lower() if voice_data else ""
+            return ""
+        except sr.RequestError:
+            print("[NETWORK ERROR]")
+            return ""
 
-def open_file_mac(filepath):
-    """macOS equivalent of os.startfile"""
-    subprocess.call(['open', filepath])
-
-def respond(voice_data):
-    """Process voice commands"""
-    global file_exp_status, files, is_awake, path, gesture_process
+def launch_visual_system():
+    """Launches app.py as a separate independent process"""
+    global gesture_process
     
-    print(f"[JARVIS] Command: {voice_data}")
-    voice_data = voice_data.replace('jarvis', '')
-    app.eel.addUserMsg(voice_data)
+    # Check if process is already running
+    if gesture_process is None or gesture_process.poll() is not None:
+        speak("Initializing Visual Interface...")
+        try:
+            # Launch app.py using the same python interpreter
+            gesture_process = subprocess.Popen([sys.executable, VISUAL_SYSTEM_PATH])
+            speak("System Active.")
+        except Exception as e:
+            speak(f"Failed to launch system. Error: {str(e)}")
+    else:
+        speak("The system is already running, sir.")
 
-    if not is_awake:
-        if 'wake up' in voice_data:
-            is_awake = True
-            wish()
+def stop_visual_system():
+    """Kills the app.py process"""
+    global gesture_process
+    
+    speak("Terminating Visual Interface...")
+    
+    # 1. Try graceful termination
+    if gesture_process:
+        gesture_process.terminate()
+        gesture_process = None
+    
+    # 2. Force kill (Mac specific cleanup to release camera)
+    if IS_MACOS:
+        os.system("pkill -f app.py") 
+    
+    speak("System Offline.")
+
+# ═══════════════════════════════════════════════════════════════
+# COMMAND LOGIC
+# ═══════════════════════════════════════════════════════════════
+
+def process_command(query):
+    global is_awake
+
+    # 1. WAKE / SLEEP
+    if "wake up" in query:
+        is_awake = True
+        wish_user()
+        return
+    
+    if "sleep" in query:
+        speak("Going to sleep.")
+        is_awake = False
         return
 
-    # ═══════════════════════════════════════════════════════
-    # GESTURE CONTROL COMMANDS (IMPROVED)
-    # ═══════════════════════════════════════════════════════
-    
-    if 'start' in voice_data or 'launch gesture' in voice_data:
-        reply('Starting Gesture System...')
-        try:
-            # Kill any existing process
-            os.system("pkill -f app.py")
-            time.sleep(0.5)
-            
-            # Launch new process
-            gesture_process = subprocess.Popen([
-                sys.executable, 
-                'src/app.py.py'
-            ])
-            reply('Gesture system launched successfully')
-        except Exception as e:
-            reply(f'Failed to start gesture system: {str(e)}')
-    
-    elif 'stop' in voice_data or 'stop gesture' in voice_data:
-        reply('Stopping Gesture System...')
-        try:
-            if gesture_process:
-                gesture_process.terminate()
-                gesture_process = None
-            os.system("pkill -f app.py")
-            reply('Gesture system stopped')
-        except Exception as e:
-            reply(f'Error stopping gesture system: {str(e)}')
-    
-    # ═══════════════════════════════════════════════════════
-    # BASIC COMMANDS
-    # ═══════════════════════════════════════════════════════
-    
-    elif 'hello' in voice_data:
-        wish()
-    
-    elif 'what is your name' in voice_data:
-        reply('My name is Jarvis!')
-    
-    elif 'date' in voice_data:
-        reply(today.strftime("%B %d, %Y"))
-    
-    elif 'time' in voice_data:
-        reply(str(datetime.datetime.now()).split(" ")[1].split('.')[0])
-    
-    elif 'search' in voice_data:
-        query = voice_data.split('search')[1]
-        reply(f'Searching for {query}')
-        url = 'https://google.com/search?q=' + query
-        try:
-            webbrowser.get().open(url)
-            reply('This is what I found')
-        except:
-            reply('Please check your internet')
-    
-    elif 'location' in voice_data:
-        reply('Which place are you looking for?')
-        temp_audio = record_audio()
-        app.eel.addUserMsg(temp_audio)
-        reply('Locating...')
-        url = 'https://google.nl/maps/place/' + temp_audio
-        try:
-            webbrowser.get().open(url)
-            reply('This is what I found')
-        except:
-            reply('Please check your internet')
-    
-    elif 'bye' in voice_data or 'by' in voice_data:
-        reply("Goodbye sir! Have a nice day.")
-        is_awake = False
-    
-    elif 'exit' in voice_data or 'terminate' in voice_data:
-        if gesture_process:
-            gesture_process.terminate()
-        os.system("pkill -f app.py")
-        app.ChatBot.close()
+    if not is_awake:
+        return
+
+    # 2. SYSTEM CONTROLS (Orchestration)
+    if "start" in query or "launch" in query or "activate" in query:
+        launch_visual_system()
+
+    elif "stop" in query or "terminate" in query or "shutdown" in query:
+        stop_visual_system()
+
+    # 3. UTILITIES
+    elif "time" in query:
+        strTime = datetime.datetime.now().strftime("%H:%M")
+        speak(f"The time is {strTime}")
+
+    elif "search" in query:
+        query = query.replace("search", "")
+        speak(f"Searching for {query}")
+        webbrowser.open(f"https://www.google.com/search?q={query}")
+
+    elif "exit" in query or "goodbye" in query:
+        stop_visual_system()
+        speak("Goodbye, sir.")
         sys.exit()
-    
-    elif 'copy' in voice_data:
-        with keyboard.pressed(Key.cmd):
-            keyboard.press('c')
-            keyboard.release('c')
-        reply('Copied')
-    
-    elif 'paste' in voice_data:
-        with keyboard.pressed(Key.cmd):
-            keyboard.press('v')
-            keyboard.release('v')
-        reply('Pasted')
-    
-    elif 'list' in voice_data:
-        counter = 0
-        path = '/Users/' + os.getlogin() + '/Documents/'
-        try:
-            files = listdir(path)
-            filestr = ""
-            for f in files:
-                counter += 1
-                filestr += str(counter) + ':  ' + f + '<br>'
-            file_exp_status = True
-            reply('These are the files in your documents directory')
-            app.ChatBot.addAppMsg(filestr)
-        except:
-            reply('Could not access documents')
-    
-    elif file_exp_status == True:
-        counter = 0   
-        if 'open' in voice_data:
-            if isfile(join(path, files[int(voice_data.split(' ')[-1])-1])):
-                open_file_mac(path + files[int(voice_data.split(' ')[-1])-1])
-                file_exp_status = False
-            else:
-                try:
-                    path = path + files[int(voice_data.split(' ')[-1])-1] + '//'
-                    files = listdir(path)
-                    filestr = ""
-                    for f in files:
-                        counter += 1
-                        filestr += str(counter) + ':  ' + f + '<br>'
-                    reply('Opened successfully')
-                    app.ChatBot.addAppMsg(filestr)
-                except:
-                    reply('You do not have permission to access this folder')
-        
-        if 'back' in voice_data:
-            filestr = ""
-            if path == '/':
-                reply('Sorry, this is the root directory')
-            else:
-                a = path.split('//')[:-2]
-                path = '//'.join(a) + '//'
-                files = listdir(path)
-                for f in files:
-                    counter += 1
-                    filestr += str(counter) + ':  ' + f + '<br>'
-                reply('Okay')
-                app.ChatBot.addAppMsg(filestr)
-    
-    else: 
-        reply('I am not programmed for that yet')
 
 # ═══════════════════════════════════════════════════════════════
 # MAIN LOOP
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    print("=" * 60)
-    print("  JARVIS - Voice Assistant")
-    print("=" * 60)
+    print("-----------------------------------")
+    print("   JARVIS ORCHESTRATOR (Phase 3)   ")
+    print("-----------------------------------")
     
-    t1 = Thread(target=app.ChatBot.start)
-    t1.start()
-    
-    while not app.ChatBot.started:
-        time.sleep(0.5)
-    
-    wish()
-    voice_data = None
+    wish_user()
     
     while True:
-        if app.ChatBot.isUserInput():
-            voice_data = app.ChatBot.popUserInput()
-        else:
-            voice_data = record_audio()
-        
-        if 'jarvis' in voice_data:
-            try:
-                respond(voice_data)
-            except SystemExit:
-                reply("Exit successful")
-                break
-            except Exception as e:
-                print(f"[ERROR] {e}")
-                break
+        query = listen()
+        if query:
+            process_command(query)
