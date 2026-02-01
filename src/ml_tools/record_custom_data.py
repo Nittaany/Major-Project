@@ -1,98 +1,188 @@
+# import cv2
+# import numpy as np
+# import os
+# import mediapipe as mp
+# import sys
+
+# # Add project root to path so we can import utils
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+
+# from src.utils.normalization import normalize_features
+
+# # --- CONFIGURATION ---
+# OUTPUT_PATH = "data/processed"
+# # We add "Idle" to your list of target words
+# CLASSES_TO_RECORD = ["Idle", "hello", "thank you", "good", "happy", "i", "you"] 
+# SAMPLES_PER_CLASS = 20  # 20 solid samples per class is enough for fine-tuning
+# FRAMES_PER_SAMPLE = 30  # 1 second
+
+# mp_holistic = mp.solutions.holistic
+
+# def record_class(class_name, start_id, holistic, cap):
+#     print(f"\n[RECORDING] Class: '{class_name}'")
+#     print(f"Goal: {SAMPLES_PER_CLASS} samples.")
+#     print("Press 'S' to start recording ONE sample.")
+#     print("Press 'Q' to skip/quit.")
+    
+#     sequences = []
+#     labels = []
+    
+#     while len(sequences) < SAMPLES_PER_CLASS:
+#         ret, frame = cap.read()
+#         if not ret: break
+        
+#         # 1. MIRROR FLIP (Match the HCI Controller logic)
+#         frame = cv2.flip(frame, 1)
+        
+#         # UI Overlay
+#         cv2.putText(frame, f"TARGET: {class_name}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+#         cv2.putText(frame, f"Saved: {len(sequences)}/{SAMPLES_PER_CLASS}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+#         cv2.imshow('Data Recorder', frame)
+        
+#         key = cv2.waitKey(1)
+#         if key == ord('q'): return None, None
+        
+#         if key == ord('s'):
+#             # Record 30 Frames
+#             temp_seq = []
+#             print(f"Recording {class_name}...")
+            
+#             for _ in range(FRAMES_PER_SAMPLE):
+#                 ret, frame = cap.read()
+#                 if not ret: break
+                
+#                 # FLIP BEFORE PROCESSING
+#                 frame = cv2.flip(frame, 1)
+                
+#                 image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+#                 results = holistic.process(image)
+                
+#                 # USE THE NEW NORMALIZATION
+#                 keypoints = normalize_features(results)
+#                 temp_seq.append(keypoints)
+                
+#                 # Visual Feedback (Red Dot)
+#                 cv2.circle(frame, (30, 30), 20, (0, 0, 255), -1)
+#                 cv2.imshow('Data Recorder', frame)
+#                 cv2.waitKey(1)
+            
+#             sequences.append(temp_seq)
+#             labels.append(start_id)
+#             print(f" -> Sample {len(sequences)} Saved.")
+            
+#     return sequences, labels
+
+# def main():
+#     if not os.path.exists(OUTPUT_PATH):
+#         os.makedirs(OUTPUT_PATH)
+    
+#     cap = cv2.VideoCapture(0) # Or 1 if on Mac external cam
+    
+#     all_sequences = []
+#     all_labels = []
+#     label_map = {}
+    
+#     with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
+#         for idx, class_name in enumerate(CLASSES_TO_RECORD):
+#             label_map[class_name] = idx
+            
+#             # Allow user to prepare
+#             print(f"\nPREPARING FOR: {class_name}")
+            
+#             seqs, lbls = record_class(class_name, idx, holistic, cap)
+#             if seqs is None: 
+#                 print("Recording stopped.")
+#                 break
+                
+#             all_sequences.extend(seqs)
+#             all_labels.extend(lbls)
+            
+#     cap.release()
+#     cv2.destroyAllWindows()
+    
+#     # Merge with existing data if possible, or save new
+#     X = np.array(all_sequences)
+#     y = np.array(all_labels)
+    
+#     print(f"\n[COMPLETED] Recorded Shape: {X.shape}")
+#     np.save(f"{OUTPUT_PATH}/X_custom.npy", X)
+#     np.save(f"{OUTPUT_PATH}/y_custom.npy", y)
+#     np.save(f"{OUTPUT_PATH}/labels_custom.npy", label_map)
+#     print("Custom Data Saved. Next Step: Merge with INCLUDE-50.")
+
+# if __name__ == "__main__":
+#     main()
+
 import cv2
-import numpy as np
 import os
-import mediapipe as mp
 import time
 
 # --- CONFIGURATION ---
-OUTPUT_PATH = "data/processed" 
-TARGET_CLASS = "Idle"       # We are recording the 'Idle' class
-SAMPLES_TO_RECORD = 50      # 50 samples is plenty
-FRAMES_PER_SAMPLE = 30      # 1 second per sample
+# We save directly into the raw data folder
+DATASET_ROOT = "data/raw/INCLUDE50" 
 
-mp_holistic = mp.solutions.holistic
+# Add the classes you want to "Inject" into the dataset
+# 'Idle' is the critical one. Add others like 'Hello', 'Help', etc.
+CLASSES_TO_RECORD = ["Idle", "Hello", "Help", "Thanks", "Good", "Bad"]
+VIDEOS_PER_CLASS = 20
+DURATION_SEC = 2  # 2 seconds per clip
 
-def extract_features(results):
-    # Same extraction logic as your main app
-    if results.pose_landmarks:
-        pose = np.array([[res.x, res.y, res.z] for res in results.pose_landmarks.landmark[:24]]).flatten()
-    else: pose = np.zeros(24 * 3)
-    if results.left_hand_landmarks:
-        lh = np.array([[res.x, res.y, res.z] for res in results.left_hand_landmarks.landmark]).flatten()
-    else: lh = np.zeros(21 * 3)
-    if results.right_hand_landmarks:
-        rh = np.array([[res.x, res.y, res.z] for res in results.right_hand_landmarks.landmark]).flatten()
-    else: rh = np.zeros(21 * 3)
-    return np.concatenate([pose, lh, rh])
-
-def record():
-    # Load existing data to append to it
-    try:
-        X = np.load(f"{OUTPUT_PATH}/X.npy")
-        y = np.load(f"{OUTPUT_PATH}/y.npy")
-        labels_map = np.load(f"{OUTPUT_PATH}/labels.npy", allow_pickle=True).item()
-        print(f"[INFO] Loaded existing data: {X.shape}")
-    except:
-        print("[ERROR] Could not load X.npy. Run this ONLY after you have your main dataset ready.")
-        return
-
-    # Add 'Idle' to the label map if not there
-    if TARGET_CLASS not in labels_map:
-        new_id = len(labels_map)
-        labels_map[TARGET_CLASS] = new_id
-        print(f"[NEW CLASS] Added '{TARGET_CLASS}' with ID {new_id}")
-    else:
-        print(f"[INFO] Appending to existing class '{TARGET_CLASS}'")
-    
-    target_id = labels_map[TARGET_CLASS]
-    cap = cv2.VideoCapture(0)
-    
-    new_sequences = []
-    new_labels = []
-
-    with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
-        print(f"--- PREPARE TO RECORD '{TARGET_CLASS}' ---")
-        print("Press 's' to start recording a sequence.")
-        print("Press 'q' to quit.")
+def record_class(class_name):
+    save_dir = os.path.join(DATASET_ROOT, class_name)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
         
-        while len(new_sequences) < SAMPLES_TO_RECORD:
-            ret, frame = cap.read()
-            if not ret: break
+    cap = cv2.VideoCapture(0) # Change to 1 if using external cam
+    
+    print(f"\n[RECORDING] Class: {class_name}")
+    print(f"Saving to: {save_dir}")
+    print("Press 'S' to start recording a 2-second clip.")
+    print("Press 'Q' to skip this class.")
+    
+    count = len([n for n in os.listdir(save_dir) if n.endswith(".mp4")])
+    
+    while count < VIDEOS_PER_CLASS:
+        ret, frame = cap.read()
+        if not ret: break
+        
+        # Mirror for display only
+        show_frame = cv2.flip(frame, 1)
+        cv2.putText(show_frame, f"Class: {class_name}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(show_frame, f"Recorded: {count}/{VIDEOS_PER_CLASS}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+        cv2.imshow("Recorder", show_frame)
+        
+        key = cv2.waitKey(1)
+        if key == ord('q'): break
+        
+        if key == ord('s'):
+            # Start Recording
+            filename = os.path.join(save_dir, f"custom_{int(time.time())}.mp4")
+            # Define codec
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(filename, fourcc, 30.0, (640, 480))
             
-            cv2.putText(frame, f"Recorded: {len(new_sequences)}/{SAMPLES_TO_RECORD}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            cv2.imshow('Recorder', frame)
-            
-            key = cv2.waitKey(1)
-            if key == ord('q'): break
-            if key == ord('s'):
-                # Record one 30-frame sequence
-                temp_seq = []
-                for _ in range(FRAMES_PER_SAMPLE):
-                    ret, frame = cap.read()
-                    image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    results = holistic.process(image)
-                    temp_seq.append(extract_features(results))
+            start_time = time.time()
+            while (time.time() - start_time) < DURATION_SEC:
+                ret, frame = cap.read()
+                if ret:
+                    # Note: We do NOT flip the saved video. 
+                    # The dataset expects raw camera feed.
+                    # We will flip it in the extractor if needed.
+                    out.write(frame)
                     
-                    cv2.putText(frame, "RECORDING...", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                    cv2.imshow('Recorder', frame)
+                    # Show "Recording" UI
+                    show_frame = cv2.flip(frame, 1)
+                    cv2.circle(show_frame, (30, 30), 20, (0, 0, 255), -1)
+                    cv2.imshow("Recorder", show_frame)
                     cv2.waitKey(1)
-                
-                new_sequences.append(temp_seq)
-                new_labels.append(target_id)
-                print(f"Saved Sample {len(new_sequences)}")
+            
+            out.release()
+            count += 1
+            print(f"Saved {filename}")
 
     cap.release()
     cv2.destroyAllWindows()
-    
-    # Merge and Save
-    if len(new_sequences) > 0:
-        X_new = np.concatenate([X, np.array(new_sequences)])
-        y_new = np.concatenate([y, np.array(new_labels)])
-        
-        np.save(f"{OUTPUT_PATH}/X.npy", X_new)
-        np.save(f"{OUTPUT_PATH}/y.npy", y_new)
-        np.save(f"{OUTPUT_PATH}/labels.npy", labels_map)
-        print("[SUCCESS] Data Saved & Merged!")
 
 if __name__ == "__main__":
-    record()
+    for cls in CLASSES_TO_RECORD:
+        record_class(cls)
