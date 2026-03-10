@@ -1,90 +1,141 @@
 
-//user clicked button
-document.getElementById("userInputButton").addEventListener("click", getUserInput, false);
-//user pressed enter '13'
-document.getElementById("userInput").addEventListener("keyup", function (event) {
-    if (event.keyCode === 13) {
-        //cancel the default action
-        event.preventDefault();
-        //process event
-        getUserInput();
-    }
+// //user clicked button
+// document.getElementById("userInputButton").addEventListener("click", getUserInput, false);
+// //user pressed enter '13'
+// document.getElementById("userInput").addEventListener("keyup", function (event) {
+//     if (event.keyCode === 13) {
+//         //cancel the default action
+//         event.preventDefault();
+//         //process event
+//         getUserInput();
+//     }
+// });
+
+// eel.expose(addUserMsg);
+// eel.expose(addAppMsg);
+
+
+// function addUserMsg(msg) {
+//     element = document.getElementById("messages");
+//     element.innerHTML += '<div class="message from ready rtol">' + msg + '</div>';
+//     element.scrollTop = element.scrollHeight - element.clientHeight - 15;
+//     //add delay for animation to complete and then modify class to => "message from"
+//     index = element.childElementCount - 1;
+//     setTimeout(changeClass.bind(null, element, index, "message from"), 500);
+// }
+
+// function addAppMsg(msg) {
+//     element = document.getElementById("messages");
+//     element.innerHTML += '<div class="message to ready ltor">' + msg + '</div>';
+//     element.scrollTop = element.scrollHeight - element.clientHeight - 15;
+//     //add delay for animation to complete and then modify class to => "message to"
+//     index = element.childElementCount - 1;
+//     setTimeout(changeClass.bind(null, element, index, "message to"), 500);
+// }
+
+// function changeClass(element, index, newClass) {
+//     console.log(newClass +' '+ index);
+//     element.children[index].className = newClass;
+// }
+
+
+// function getUserInput() {
+//     element = document.getElementById("userInput");
+//     msg = element.value;
+//     if (msg.length != 0) {
+//         element.value = "";
+//         eel.getUserInput(msg);
+//     }
+// }
+
+// // Existing Input Listeners
+// document.getElementById("userInputButton").addEventListener("click", getUserInput, false);
+// document.getElementById("userInput").addEventListener("keyup", function (event) {
+//     if (event.keyCode === 13) { getUserInput(); }
+// });
+
+// // EEL EXPOSED FUNCTIONS
+// eel.expose(addUserMsg);
+// function addUserMsg(msg) {
+//     let element = document.getElementById("messages");
+//     element.innerHTML += '<div class="message from">' + msg + '</div>';
+//     element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+// }
+
+// eel.expose(addAppMsg);
+// function addAppMsg(msg) {
+//     let element = document.getElementById("messages");
+//     element.innerHTML += '<div class="message to">' + msg + '</div>';
+//     element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
+// }
+
+// eel.expose(updateStatus);
+// function updateStatus(status) {
+//     document.getElementById("status-label").innerText = status;
+// }
+
+// eel.expose(updateStats);
+// function updateStats(cpu, ram) {
+//     document.getElementById("cpu-val").innerText = cpu;
+//     document.getElementById("ram-val").innerText = ram;
+// }
+
+// eel.expose(toggleVoiceWave);
+// function toggleVoiceWave(show) {
+//     let wave = document.getElementById("voice-wave-container");
+//     wave.style.opacity = show ? "1" : "0.2";
+//     wave.style.filter = show ? "none" : "grayscale(1)";
+// }
+
+// function getUserInput() {
+//     let element = document.getElementById("userInput");
+//     let msg = element.value;
+//     if (msg.length != 0) {
+//         element.value = "";
+//         eel.getUserInput(msg);
+//     }
+// }
+
+// --- SCROLL FIX (Mutation Observer) ---
+// This watches for ANY new messages and forces a scroll to bottom
+const chatContainer = document.getElementById("messages");
+
+const observer = new MutationObserver(() => {
+    chatContainer.scrollTo({
+        top: chatContainer.scrollHeight,
+        behavior: 'smooth'
+    });
 });
 
-eel.expose(addUserMsg);
-eel.expose(addAppMsg);
+observer.observe(chatContainer, { childList: true });
 
-
-function addUserMsg(msg) {
-    element = document.getElementById("messages");
-    element.innerHTML += '<div class="message from ready rtol">' + msg + '</div>';
-    element.scrollTop = element.scrollHeight - element.clientHeight - 15;
-    //add delay for animation to complete and then modify class to => "message from"
-    index = element.childElementCount - 1;
-    setTimeout(changeClass.bind(null, element, index, "message from"), 500);
-}
-
-function addAppMsg(msg) {
-    element = document.getElementById("messages");
-    element.innerHTML += '<div class="message to ready ltor">' + msg + '</div>';
-    element.scrollTop = element.scrollHeight - element.clientHeight - 15;
-    //add delay for animation to complete and then modify class to => "message to"
-    index = element.childElementCount - 1;
-    setTimeout(changeClass.bind(null, element, index, "message to"), 500);
-}
-
-function changeClass(element, index, newClass) {
-    console.log(newClass +' '+ index);
-    element.children[index].className = newClass;
-}
-
-
-function getUserInput() {
-    element = document.getElementById("userInput");
-    msg = element.value;
-    if (msg.length != 0) {
-        element.value = "";
-        eel.getUserInput(msg);
+// --- TOGGLE INPUT (Called by Python) ---
+eel.expose(toggleInput);
+function toggleInput(show) {
+    let input = document.getElementById("userInput");
+    let btn = document.getElementById("userInputButton");
+    
+    if (show) {
+        input.style.display = "block";
+        btn.style.display = "block";
+        input.focus();
+    } else {
+        input.style.display = "none";
+        btn.style.display = "none";
     }
 }
 
-// Existing Input Listeners
-document.getElementById("userInputButton").addEventListener("click", getUserInput, false);
-document.getElementById("userInput").addEventListener("keyup", function (event) {
-    if (event.keyCode === 13) { getUserInput(); }
-});
-
-// EEL EXPOSED FUNCTIONS
+// --- EXISTING LOGIC ---
 eel.expose(addUserMsg);
 function addUserMsg(msg) {
     let element = document.getElementById("messages");
     element.innerHTML += '<div class="message from">' + msg + '</div>';
-    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
 }
 
 eel.expose(addAppMsg);
 function addAppMsg(msg) {
     let element = document.getElementById("messages");
     element.innerHTML += '<div class="message to">' + msg + '</div>';
-    element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
-}
-
-eel.expose(updateStatus);
-function updateStatus(status) {
-    document.getElementById("status-label").innerText = status;
-}
-
-eel.expose(updateStats);
-function updateStats(cpu, ram) {
-    document.getElementById("cpu-val").innerText = cpu;
-    document.getElementById("ram-val").innerText = ram;
-}
-
-eel.expose(toggleVoiceWave);
-function toggleVoiceWave(show) {
-    let wave = document.getElementById("voice-wave-container");
-    wave.style.opacity = show ? "1" : "0.2";
-    wave.style.filter = show ? "none" : "grayscale(1)";
 }
 
 function getUserInput() {
@@ -95,3 +146,8 @@ function getUserInput() {
         eel.getUserInput(msg);
     }
 }
+
+document.getElementById("userInputButton").addEventListener("click", getUserInput, false);
+document.getElementById("userInput").addEventListener("keyup", function (event) {
+    if (event.keyCode === 13) { getUserInput(); }
+});
