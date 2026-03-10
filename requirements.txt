@@ -1,23 +1,19 @@
 # --- Core Vision & UI ---
-opencv-python
-mediapipe
-pyautogui
-screen-brightness-control
-pynput
-Eel
+opencv-python==4.9.0.80
+mediapipe==0.10.9
+PyAutoGUI==0.9.54
+Eel==0.18.2
 
 # --- AI & Data Processing ---
-numpy
-tqdm
+numpy==1.26.4
 scikit-learn
+tqdm==4.67.1
 
 # --- Voice & Audio (Jarvis) ---
-pyttsx3
-SpeechRecognition
-pyaudio
-wikipedia
+pyttsx3==2.99
+SpeechRecognition==3.14.5
+wikipedia==1.4.0
 
 # --- Apple Silicon AI Engine ---
-# Note: On macOS M1/M2/M3, tensorflow usually works fine now.
-# If it fails, you can switch to tflite-runtime.
-tensorflow
+tensorflow-macos==2.16.2
+protobuf==3.20.3
