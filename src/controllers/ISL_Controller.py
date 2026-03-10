@@ -162,7 +162,6 @@ import cv2
 import os
 import tensorflow as tf
 
-# --- NORMALIZATION (Keep your existing function) ---
 def normalize_features(results):
     if results.pose_landmarks:
         pose = np.array([[res.x, res.y, res.z] for res in results.pose_landmarks.landmark[:25]])
@@ -192,14 +191,12 @@ except: from tflite_runtime.interpreter import Interpreter
 def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_flag):
     print("\033[96m[ISL] Process Launching...\033[0m")
     
-    # PATHS
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.abspath(os.path.join(current_dir, '../../'))
     MODEL_PATH = os.path.join(project_root, "models", "ISL_Model.tflite")
     LABEL_PATH = os.path.join(project_root, "data", "processed", "labels.npy")
     BRIDGE_PATH = os.path.join(project_root, "data", "isl_live.txt")
 
-    # SETUP
     try:
         shm = shared_memory.SharedMemory(name=shm_name)
         frame_buffer = np.ndarray(shape, dtype=np.uint8, buffer=shm.buf)
@@ -215,14 +212,12 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
     labels_map = np.load(LABEL_PATH, allow_pickle=True).item()
     id_to_label = {v: k for k, v in labels_map.items()}
 
-    # LOGIC VARS
     sequence = collections.deque(maxlen=30)
     prediction_buffer = collections.deque(maxlen=5) 
     
-    # --- SENTENCE BUFFER (The New Feature) ---
-    sentence_buffer = [] 
-    last_sign_time = time.time()
-    IDLE_TIMEOUT = 2.5 # Seconds of "Idle" to clear sentence
+    last_word_time = 0
+    COOLDOWN = 2.0
+    last_detected_word = ""
 
     while not stop_event.is_set():
         if not frame_ready_event.wait(timeout=1.0): continue
@@ -251,28 +246,20 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
                     
                     if prediction_buffer.count(pred_id) == 5:
                         current_time = time.time()
+                        is_new_word = word != last_detected_word
+                        is_cooldown_over = (current_time - last_word_time) > COOLDOWN
                         
-                        # LOGIC: If "Idle", check timeout to FLUSH sentence
-                        if word.lower() == "idle":
-                            if (current_time - last_sign_time) > IDLE_TIMEOUT and len(sentence_buffer) > 0:
-                                # Sentence Complete!
-                                final_sentence = " ".join(sentence_buffer)
-                                print(f"\033[92m[ISL] >>> SENTENCE COMPLETE: {final_sentence}\033[0m")
-                                result_queue.put(final_sentence) # Send to Jarvis
-                                sentence_buffer = [] # Reset
-                        
-                        # LOGIC: If Real Word, add to buffer
-                        elif word != "Unknown":
-                            # Dedup: Don't add same word twice in a row immediately
-                            if not sentence_buffer or sentence_buffer[-1] != word:
-                                sentence_buffer.append(word)
-                                last_sign_time = current_time
+                        if word.lower() != "idle" and word != "unknown":
+                            if is_new_word or is_cooldown_over:
+                                print(f"\033[92m[ISL] >>> RECOGNIZED: {word.upper()}\033[0m")
+                                result_queue.put(word)
                                 
-                                # Live Update to File (so user sees construction)
                                 try:
                                     with open(BRIDGE_PATH, "w") as f:
-                                        f.write(" ".join(sentence_buffer))
+                                        f.write(word)
                                 except: pass
-                        
-                        prediction_buffer.clear()
+                                
+                                last_word_time = current_time
+                                last_detected_word = word
+                                prediction_buffer.clear()
     shm.close()
