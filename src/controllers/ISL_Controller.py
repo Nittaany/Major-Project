@@ -151,7 +151,7 @@
 #         except: pass
 #         print("[ISL] Stopped")
 
-#* phase 2.5
+#* phase 3
 
 import mediapipe as mp
 import numpy as np
@@ -215,18 +215,43 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
     sequence = collections.deque(maxlen=30)
     prediction_buffer = collections.deque(maxlen=5) 
     
+    # --- PHASE 3: SENTENCE BUFFER VARIABLES ---
+    sentence_buffer = []
     last_word_time = 0
-    COOLDOWN = 2.0
+    last_valid_time = time.time()  
     last_detected_word = ""
+    
+    COOLDOWN = 2.0          
+    SENTENCE_TIMEOUT = 2.5  
 
     while not stop_event.is_set():
         if not frame_ready_event.wait(timeout=1.0): continue
         if mode_flag.value != 1: continue
 
+        current_time = time.time()
         current_frame = frame_buffer.copy()
         image = cv2.cvtColor(current_frame, cv2.COLOR_BGR2RGB)
         results = holistic.process(image)
         
+        # =========================================================
+        # 1. THE TERMINATOR (Check if sentence is complete)
+        # =========================================================
+        if len(sentence_buffer) > 0 and (current_time - last_valid_time) > SENTENCE_TIMEOUT:
+            final_sentence = " ".join(sentence_buffer)
+            print(f"\n\033[93m[ISL] 🚀 SENTENCE COMPLETE: {final_sentence}\033[0m\n")
+            
+            result_queue.put(final_sentence)
+            try:
+                with open(BRIDGE_PATH, "w") as f:
+                    f.write(final_sentence)
+            except: pass
+            
+            sentence_buffer.clear()
+            last_detected_word = ""
+
+        # =========================================================
+        # 2. THE ACCUMULATOR (Process live frames)
+        # =========================================================
         if results.pose_landmarks:
             keypoints = normalize_features(results)
             sequence.append(keypoints)
@@ -245,21 +270,29 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
                     prediction_buffer.append(pred_id)
                     
                     if prediction_buffer.count(pred_id) == 5:
-                        current_time = time.time()
                         is_new_word = word != last_detected_word
                         is_cooldown_over = (current_time - last_word_time) > COOLDOWN
                         
+                        # Filter out noise and Idle
                         if word.lower() != "idle" and word != "unknown":
                             if is_new_word or is_cooldown_over:
-                                print(f"\033[92m[ISL] >>> RECOGNIZED: {word.upper()}\033[0m")
-                                result_queue.put(word)
                                 
-                                try:
-                                    with open(BRIDGE_PATH, "w") as f:
-                                        f.write(word)
-                                except: pass
-                                
-                                last_word_time = current_time
-                                last_detected_word = word
-                                prediction_buffer.clear()
+                                # --- STRICT DUPLICATE FILTER ---
+                                if len(sentence_buffer) == 0 or word != sentence_buffer[-1]:
+                                    print(f"\033[92m[ISL] + Added to buffer: {word.upper()}\033[0m")
+                                    sentence_buffer.append(word)
+                                    
+                                    # Update trackers
+                                    last_word_time = current_time
+                                    last_valid_time = current_time  
+                                    last_detected_word = word
+                                    prediction_buffer.clear()
+                                else:
+                                    # It's a duplicate being held too long. Reset timeout, but don't add.
+                                    last_valid_time = current_time
+                                    prediction_buffer.clear()
+                        else:
+                            # If model sees "Idle", let timeout tick naturally
+                            prediction_buffer.clear()
+
     shm.close()
