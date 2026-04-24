@@ -58,6 +58,7 @@ def main():
     frame_ready = mp.Event()
     stop_event = mp.Event()
     isl_result_queue = mp.Queue()
+    isl_buffer_queue = mp.Queue()  # NEW: For live buffer feedback
     current_isl_text = "Waiting for signs..."
     mode_flag = mp.Value('i', 0)  # 0 = Mouse, 1 = ISL
 
@@ -110,7 +111,9 @@ def main():
     print("[BACKEND] Wake Gesture Confirmed. Launching Processes...")
     
     p_hci = mp.Process(target=run_hci, args=('jarvis_shm', FRAME_SHAPE, frame_ready, stop_event, mode_flag))
-    p_isl = mp.Process(target=run_isl, args=('jarvis_shm', FRAME_SHAPE, frame_ready, stop_event, isl_result_queue, mode_flag))
+    p_isl = mp.Process(
+    target=run_isl, 
+    args=('jarvis_shm', FRAME_SHAPE, frame_ready, stop_event, isl_result_queue, mode_flag, isl_buffer_queue))
     
     p_hci.start()
     p_isl.start()
@@ -200,11 +203,30 @@ def main():
             # --- SUBTITLES (Bottom Center) ---
             if not isl_result_queue.empty():
                 current_isl_text = isl_result_queue.get()
+
+            if is_isl:
+                # Display final sentence
+                if current_isl_text:
+                    sub_size = cv2.getTextSize(current_isl_text, font, 0.9, 2)[0]
+                    sub_x = (WIDTH - sub_size[0]) // 2
+                    cv2.putText(frame, current_isl_text, (sub_x, HEIGHT - 20), font, 0.9, (255, 255, 255), 2)
                 
-            if is_isl and current_isl_text:
-                sub_size = cv2.getTextSize(current_isl_text, font, 0.9, 2)[0]
-                sub_x = (WIDTH - sub_size[0]) // 2
-                cv2.putText(frame, current_isl_text, (sub_x, HEIGHT - 20), font, 0.9, (255, 255, 255), 2)
+                # NEW: Display current buffer (live feedback)
+                current_buffer_text = ""
+                if not isl_buffer_queue.empty():
+                    try:
+                        current_buffer_text = isl_buffer_queue.get_nowait()
+                    except:
+                        pass
+                
+                if current_buffer_text:
+                    buf_text = f"Building: {current_buffer_text}"
+                    buf_size = cv2.getTextSize(buf_text, font, 0.6, 1)[0]
+                    buf_x = (WIDTH - buf_size[0]) // 2
+                    
+                    # Draw background for visibility
+                    cv2.rectangle(frame, (buf_x - 5, HEIGHT - 70), (buf_x + buf_size[0] + 5, HEIGHT - 45), (40, 40, 40), -1)
+                    cv2.putText(frame, buf_text, (buf_x, HEIGHT - 50), font, 0.6, (100, 200, 255), 1)
 
             # beautiful frame show
             cv2.imshow("Jarvis Vision Feed", frame)
