@@ -508,7 +508,8 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
     output_details = interpreter.get_output_details()
     
     labels_map = np.load(LABEL_PATH, allow_pickle=True).item()
-    id_to_label = {v: k for k, v in labels_map.items()}
+
+    id_to_label = {v: k.strip().upper() for k, v in labels_map.items()}
     
     print(f"\033[92m[ISL] ✓ TFLite model loaded\033[0m")
     print(f"\033[92m[ISL] ✓ Vocabulary: {len(id_to_label)} signs\033[0m")
@@ -541,7 +542,7 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
     
     # Idle detection
     idle_counter = 0
-    IDLE_COMMIT_FRAMES = 8          # 8 frames @ 30fps ≈ 0.27s of continuous idle
+    IDLE_COMMIT_FRAMES = 10          # 10 frames @ 30fps ≈ 0.33s of continuous idle
     
     # Word hold confirmation system
     # A word must be STABLE for this duration before adding
@@ -552,12 +553,12 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
     # Post-word stability protection
     # CRITICAL FIX: After adding a word, block finalization briefly
     # This prevents cutting off sentences right after a word appears
-    POST_WORD_STABILITY = 1.0       # Seconds - grace period after word addition
+    POST_WORD_STABILITY = 0.8       # Seconds - grace period after word addition
     
     # Timeout management with extension grace
     timeout_armed = False
     timeout_start_time = 0
-    BUFFER_EXTENSION_GRACE = 1.5    # Seconds - if new word comes, extend instead of finalize
+    BUFFER_EXTENSION_GRACE = 1    # Seconds - if new word comes, extend instead of finalize
     
     # Cooldown anti-spam
     COOLDOWN = 2.0                  # Seconds - prevent immediate re-detection of same word
