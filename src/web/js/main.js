@@ -54,3 +54,14 @@ document.getElementById("userInputButton").addEventListener("click", getUserInpu
 document.getElementById("userInput").addEventListener("keyup", function (event) {
     if (event.keyCode === 13) { getUserInput(); }
 });
+
+function switchBackend() {
+    let mode = document.getElementById("backendToggle").value;
+    
+    // Call the Python endpoint
+    eel.set_llm_backend(mode);
+    
+    // Give the user visual feedback
+    let chatContainer = document.getElementById("messages");
+    chatContainer.innerHTML += `<div class="message system" style="text-align: center; color: #94a3b8; font-size: 0.8rem; width: 100%; margin: 10px 0;">[System: Engine routed to ${mode}]</div>`;
+}

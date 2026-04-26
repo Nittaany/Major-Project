@@ -325,7 +325,7 @@ def calculate_dynamic_timeout(sentence_buffer):
         return 4.0  # Default fallback
 
 
-def parse_intent(buffer, user_name="Nitant"):
+def parse_intent(buffer, user_name="Satyam"):
     """
     Enhanced slot-based intent parser with robust pattern matching.
     
@@ -357,46 +357,51 @@ def parse_intent(buffer, user_name="Nitant"):
     # ════════════════════════════════════════════════════════════════
     # TIER 1: IDENTITY & SELF-REFERENCE
     # ════════════════════════════════════════════════════════════════
+    if len(words_ordered) >= 3:
+        normalized = normalize_gloss_order(words_ordered)
+        capitalized = " ".join(normalized).capitalize()
+        # Return False to trigger LLM
+        return capitalized + ".", False
+
+    # ════════════════════════════════════════════════════════════════
+    # TIER 1: IDENTITY & SELF-REFERENCE (Only exact/simple matches)
+    # ════════════════════════════════════════════════════════════════
     if "I" in words_set:
-        if "HAPPY" in words_set: return f"I am {user_name} and I am feeling very happy.", True
-        if "SAD" in words_set: return f"I am {user_name} and I am feeling sad.", True
-        if "GOOD" in words_set and "TIME" not in words_set: return f"I am {user_name} and I am doing well.", True
-        if "TEACHER" in words_set: return f"I am {user_name}, and I am a teacher.", True
-        if "FATHER" in words_set:
-            if "GOOD" in words_set: return f"My father is doing well.", True
-            else: return f"This is about my father.", True
-        if "MOTHER" in words_set:
-            if "GOOD" in words_set: return f"My mother is doing well.", True
-            else: return f"This is about my mother.", True
-        if len(words_set) == 1: return f"I am {user_name}.", True
+        if "HAPPY" in words_set and len(words_set) == 2: 
+            return f"I am {user_name} and I am feeling very happy.", True
+        if "SAD" in words_set and len(words_set) == 2: 
+            return f"I am {user_name} and I am feeling sad.", True
+        if "TEACHER" in words_set and len(words_set) == 2: 
+            return f"I am {user_name}, and I am a teacher.", True
+        if len(words_set) == 1: 
+            return f"I am {user_name}.", True
     
     # ════════════════════════════════════════════════════════════════
     # TIER 2: QUESTIONS & REQUESTS
     # ════════════════════════════════════════════════════════════════
-    if "TIME" in words_set:
-        if "YOU" in words_set or "YOU_PLURAL" in words_set: return "Could you please tell me the current time?", True
-        if "GOOD" in words_set: return "Is this a good time?", True
+    if "TIME" in words_set and len(words_set) <= 2:
+        if "YOU" in words_set: 
+            return "Could you please tell me the current time?", True
         return "What is the time?", True
     
-    if "YOU" in words_set or "YOU_PLURAL" in words_set:
+    if "YOU" in words_set and len(words_set) <= 2:
         if "HAPPY" in words_set: return "Are you happy?", True
         if "GOOD" in words_set: return "Are you doing well?", True
-        if "TEACHER" in words_set and len(words_set) == 2: return "You are the teacher.", True
+        if "TEACHER" in words_set: return "You are the teacher.", True
     
     # ════════════════════════════════════════════════════════════════
     # TIER 3: GREETINGS & SOCIAL EXPRESSIONS
     # ════════════════════════════════════════════════════════════════
-    if "THANK YOU" in raw_joined:
+    if "THANK YOU" in raw_joined and len(words_set) <= 2:
         if "TEACHER" in words_set: return "Thank you very much, respected teacher.", True
         return "Thank you so much.", True
     
-    if "GOOD MORNING" in raw_joined:
+    if "GOOD MORNING" in raw_joined and len(words_set) <= 2:
         if "TEACHER" in words_set: return "Good morning, respected panel members.", True
         return "Good morning to everyone.", True
     
-    if "HELLO" in words_set:
+    if "HELLO" in words_set and len(words_set) <= 2:
         if "TEACHER" in words_set: return "Hello, honorable teacher.", True
-        if "GOOD" in words_set: return "Hello, and good to see you.", True
         return "Hello everyone.", True
     
     # ════════════════════════════════════════════════════════════════
@@ -405,7 +410,7 @@ def parse_intent(buffer, user_name="Nitant"):
     normalized = normalize_gloss_order(words_ordered)
     capitalized = " ".join(normalized).capitalize()
     
-    if any(q in words_set for q in ["TIME", "YOU", "YOU_PLURAL"]) and "THANK" not in raw_joined:
+    if any(q in words_set for q in ["TIME", "YOU"]) and "THANK" not in raw_joined:
         return capitalized + "?", False
     else:
         return capitalized + ".", False
@@ -485,8 +490,7 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
     output_details = interpreter.get_output_details()
     
     labels_map = np.load(LABEL_PATH, allow_pickle=True).item()
-
-    id_to_label = {v: k.strip().upper() for k, v in labels_map.items()}
+    id_to_label = {v: k.strip().upper().replace(" (PLURAL)", "").replace("_PLURAL", "") for k, v in labels_map.items()}
     
     print(f"\033[92m[ISL] ✓ TFLite model loaded\033[0m")
     print(f"\033[92m[ISL] ✓ Vocabulary: {len(id_to_label)} signs\033[0m")

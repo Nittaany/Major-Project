@@ -30,9 +30,15 @@
         </div>
       </div>
       
-      <div class="system-status">
-        <span class="pulse-dot"></span>
-        <span class="status-text">SYSTEM ONLINE</span>
+      <div class="system-controls">
+        <select id="backendToggle" class="cyber-select" onchange="switchBackend()">
+          <option value="GROQ">⚡ Groq </option>
+          <option value="MLX">🧠 Apple MLX </option>
+        </select>
+        <div class="system-status">
+          <span class="pulse-dot"></span>
+          <span class="status-text">ONLINE</span>
+        </div>
       </div>
     </header>
 

@@ -526,3 +526,27 @@ div.conv-form-wrapper div.message.from {
   border: 1px solid rgba(34, 211, 238, 0.3);
   animation: pulse 2s infinite;
 }
+
+/* Add to jarvis-ui.css */
+.system-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.cyber-select {
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--primary-cyan);
+  border: 1px solid var(--primary-glow);
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-family: var(--font-tech);
+  font-size: 0.75rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.cyber-select option {
+  background: var(--bg-deep);
+  color: var(--text-main);
+}

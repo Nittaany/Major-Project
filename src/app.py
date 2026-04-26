@@ -1,6 +1,8 @@
 import eel
 import os
 import queue
+from controllers.llm_engine import HybridLLM
+
 
 class ChatBot:
     started = False
@@ -23,7 +25,21 @@ class ChatBot:
     @eel.expose
     def getUserInput(msg):
         ChatBot.userinputQueue.put(msg)
-    
+
+    @eel.expose
+    def set_llm_backend(mode):
+        # Write to a shared file that vision_backend can read
+        current_file = os.path.abspath(__file__)
+        project_root = os.path.dirname(os.path.dirname(current_file))
+        mode_file = os.path.join(project_root, "data", "llm_mode.txt")
+        
+        try:
+            with open(mode_file, "w") as f:
+                f.write(mode)
+            print(f"\n\033[93m[UI] 🔄 LLM Engine manually routed to: {mode}\033[0m\n")
+        except Exception as e:
+            print(f"[UI] Error saving mode: {e}")
+
     @staticmethod
     def addUserMsg(msg):
         try: eel.addUserMsg(msg)
