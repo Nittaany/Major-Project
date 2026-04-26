@@ -4,28 +4,53 @@ import numpy as np
 import multiprocessing as mp
 from multiprocessing import shared_memory
 import time
+import os
+import queue
+import threading
 import mediapipe as mp_vision  # Renamed to avoid conflict
 
 # --- IMPORT EXISTING CONTROLLERS ---
 from controllers.HCI_Controller import run_hci
 from controllers.ISL_Controller import run_isl
+from controllers.llm_engine import HybridLLM  # <--- NEW: LLM Engine Import
 
 # --- CONFIGURATION ---
 WAKE_GESTURE_TIME = 2.0       # Seconds to hold Thumbs Up to start
-TOGGLE_GESTURE_TIME = 2     # Seconds to hold Open Palm to switch
+TOGGLE_GESTURE_TIME = 3.5     # Seconds to hold Open Palm to switch
 ROI_SIZE = 150                # Pixel size of the "Hot Corner" (Top-Left)
 
+# ═══════════════════════════════════════════════════════════════════════════
+# LLM BACKGROUND THREAD (CHUNK 5)
+# ═══════════════════════════════════════════════════════════════════════════
+llm_request_queue = queue.Queue()
+llm_result_queue = queue.Queue()
+
+def llm_worker():
+    """Background thread to process LLM requests without blocking the camera feed."""
+    print("\033[96m[BACKEND] Starting LLM Background Thread...\033[0m")
+    engine = HybridLLM()
+    while True:
+        raw_array = llm_request_queue.get()
+        if raw_array is None: break  # Kill signal
+        
+        # Generate the translation
+        sentence, source = engine.generate_sentence(raw_array)
+        
+        # Send it back to the UI
+        llm_result_queue.put(sentence)
+        llm_request_queue.task_done()
+
+# ═══════════════════════════════════════════════════════════════════════════
+# HELPER FUNCTIONS
+# ═══════════════════════════════════════════════════════════════════════════
 def is_thumbs_up(lm):
     """
     Check if hand is in Thumbs Up pose:
     - Thumb tip is higher than other finger tips (in pixel Y, lower value is higher)
     - Fingers are curled (Tip y > PIP y)
     """
-    # Thumb Tip (4) should be highest point (lowest y value)
     if lm[4].y > lm[8].y or lm[4].y > lm[12].y: return False
     
-    # Fingers should be curled (Tip y > PIP y)
-    # Index(8) > IndexPIP(6), Middle(12) > MiddlePIP(10), etc.
     if lm[8].y < lm[6].y: return False
     if lm[12].y < lm[10].y: return False
     
@@ -43,6 +68,9 @@ def is_open_palm(lm):
         if lm[f].y > lm[p].y: return False
     return True
 
+# ═══════════════════════════════════════════════════════════════════════════
+# MAIN EXECUTION
+# ═══════════════════════════════════════════════════════════════════════════
 def main():
     # 1. SETUP SHARED MEMORY
     WIDTH, HEIGHT = 640, 480
@@ -54,13 +82,22 @@ def main():
     except FileExistsError:
         shm = shared_memory.SharedMemory(name='jarvis_shm')
 
-    # 2. SETUP CONTROLS
+    # 2. SETUP CONTROLS & QUEUES
     frame_ready = mp.Event()
     stop_event = mp.Event()
     isl_result_queue = mp.Queue()
-    isl_buffer_queue = mp.Queue()  # NEW: For live buffer feedback
+    isl_buffer_queue = mp.Queue()  
     current_isl_text = "Waiting for signs..."
     mode_flag = mp.Value('i', 0)  # 0 = Mouse, 1 = ISL
+    
+    # Resolving path for Jarvis TTS Bridge
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(current_dir, '../'))
+    BRIDGE_PATH = os.path.join(project_root, "data", "isl_live.txt")
+
+    # Launch LLM Background Thread (So the UI never freezes)
+    llm_thread = threading.Thread(target=llm_worker, daemon=True)
+    llm_thread.start()
 
     # 3. START CAMERA
     cap = cv2.VideoCapture(0)
@@ -112,8 +149,9 @@ def main():
     
     p_hci = mp.Process(target=run_hci, args=('jarvis_shm', FRAME_SHAPE, frame_ready, stop_event, mode_flag))
     p_isl = mp.Process(
-    target=run_isl, 
-    args=('jarvis_shm', FRAME_SHAPE, frame_ready, stop_event, isl_result_queue, mode_flag, isl_buffer_queue))
+        target=run_isl, 
+        args=('jarvis_shm', FRAME_SHAPE, frame_ready, stop_event, isl_result_queue, mode_flag, isl_buffer_queue)
+    )
     
     p_hci.start()
     p_isl.start()
@@ -132,12 +170,10 @@ def main():
             frame = cv2.flip(frame, 1)
             
             # --- TOGGLE LOGIC (The "Long Clutch") ---
-            # We run a lightweight hand check here on the main thread
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb)
             
             toggle_active = False
-            TOGGLE_GESTURE_TIME = 3.5  
             
             if results.multi_hand_landmarks:
                 lm = results.multi_hand_landmarks[0].landmark
@@ -153,7 +189,6 @@ def main():
                     # --- CENTERED LOADING RING ---
                     cx, cy = WIDTH // 2, HEIGHT // 2
                     cv2.circle(frame, (cx, cy), 60, (200, 200, 200), 2)
-                    # Draw Arc/Progress starting from top (-90 degrees)
                     cv2.ellipse(frame, (cx, cy), (60, 60), 0, -90, -90 + int(360 * progress), (0, 255, 100), 5)
                     cv2.putText(frame, "SWITCHING MODE...", (cx - 75, cy + 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 2)
                     
@@ -164,7 +199,7 @@ def main():
                         new_mode = "ISL MODE" if mode_flag.value == 1 else "MOUSE MODE"
                         print(f"\n\033[93m[SYSTEM] 🔄 Mode Switched to: {new_mode}\033[0m\n")
                         toggle_start_time = 0 
-                        current_isl_text = "Waiting for signs..." # Reset subtitles on switch
+                        current_isl_text = "Waiting for signs..." 
                         time.sleep(1.0) 
             
             if not toggle_active:
@@ -175,43 +210,65 @@ def main():
             frame_ready.set()
 
             # ═══════════════════════════════════════════════════════════════
-            # SLEEK UI OVERLAY
+            # UI OVERLAY & LOGIC 
             # ═══════════════════════════════════════════════════════════════
             overlay = frame.copy()
             is_isl = (mode_flag.value == 1)
             
-            # Top Bar (Status)
+            # Top Bar
             cv2.rectangle(overlay, (0, 0), (WIDTH, 45), (15, 15, 15), -1)
-            
-            # Bottom Bar (Subtitles - Only in ISL Mode)
+            # Bottom Bar (Only in ISL Mode)
             if is_isl:
                 cv2.rectangle(overlay, (0, HEIGHT - 60), (WIDTH, HEIGHT), (15, 15, 15), -1)
                 
-            # Blend the dark bars with the camera feed (75% opacity)
             alpha = 0.75
             cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
 
-            # --- MODE TEXT (Top Center) ---
-            mode_text = " ISL SIGN MODE " if is_isl else " HCI MOUSE MODE "
-            text_color = (200, 200, 50) if is_isl else (100, 255, 100) # Cyan for ISL, Green for HCI
-            
             font = cv2.FONT_HERSHEY_SIMPLEX
+
+            mode_text = " ISL SIGN MODE " if is_isl else " HCI MOUSE MODE "
+            text_color = (200, 200, 50) if is_isl else (100, 255, 100)
             text_size = cv2.getTextSize(mode_text, font, 0.7, 2)[0]
             text_x = (WIDTH - text_size[0]) // 2
             cv2.putText(frame, mode_text, (text_x, 30), font, 0.7, text_color, 2)
 
-            # --- SUBTITLES (Bottom Center) ---
+            # ═══════════════════════════════════════════════════════════════
+            # CHUNK 5: SUBTITLE & LLM HANDSHAKE
+            # ═══════════════════════════════════════════════════════════════
+            
+            # 1. Check for incoming data from the ISL Controller
             if not isl_result_queue.empty():
-                current_isl_text = isl_result_queue.get()
+                # Catch the 3-part tuple from Chunk 4
+                final_sentence, raw_array, rule_matched = isl_result_queue.get()
+                
+                if rule_matched:
+                    # Deterministic rule handled it. Display immediately.
+                    current_isl_text = final_sentence
+                else:
+                    # Rule failed. Trigger the background LLM!
+                    current_isl_text = f"Translating: {' '.join(raw_array)}..."
+                    llm_request_queue.put(raw_array)
 
+            # 2. Check if the LLM background thread finished translating
+            if not llm_result_queue.empty():
+                current_isl_text = llm_result_queue.get_nowait()
+                
+                # Write the LLM translated sentence to the bridge file so Jarvis.py can speak it
+                try:
+                    with open(BRIDGE_PATH, "w") as f:
+                        f.write(current_isl_text)
+                except Exception as e:
+                    print(f"\033[91m[BACKEND] Bridge write error: {e}\033[0m")
+
+            # 3. Render the Text to Screen
             if is_isl:
-                # Display final sentence
+                # Display Final Sentence OR "Translating..."
                 if current_isl_text:
                     sub_size = cv2.getTextSize(current_isl_text, font, 0.9, 2)[0]
                     sub_x = (WIDTH - sub_size[0]) // 2
                     cv2.putText(frame, current_isl_text, (sub_x, HEIGHT - 20), font, 0.9, (255, 255, 255), 2)
                 
-                # NEW: Display current buffer (live feedback)
+                # Display Current Accumulating Buffer (Live feedback)
                 current_buffer_text = ""
                 if not isl_buffer_queue.empty():
                     try:
@@ -224,11 +281,9 @@ def main():
                     buf_size = cv2.getTextSize(buf_text, font, 0.6, 1)[0]
                     buf_x = (WIDTH - buf_size[0]) // 2
                     
-                    # Draw background for visibility
                     cv2.rectangle(frame, (buf_x - 5, HEIGHT - 70), (buf_x + buf_size[0] + 5, HEIGHT - 45), (40, 40, 40), -1)
                     cv2.putText(frame, buf_text, (buf_x, HEIGHT - 50), font, 0.6, (100, 200, 255), 1)
 
-            # beautiful frame show
             cv2.imshow("Jarvis Vision Feed", frame)
 
             if cv2.waitKey(1) & 0xFF == 27: break # ESC to quit
@@ -240,6 +295,8 @@ def main():
         stop_event.set()
         p_hci.join()
         p_isl.join()
+        # Send kill signal to LLM thread
+        llm_request_queue.put(None)
         cap.release()
         cv2.destroyAllWindows()
         shm.close()

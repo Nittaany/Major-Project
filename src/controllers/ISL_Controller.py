@@ -353,85 +353,62 @@ def parse_intent(buffer, user_name="Nitant"):
     # For phrase detection (multi-word units like "GOOD MORNING")
     raw_joined = " ".join(buffer)
     
+
     # ════════════════════════════════════════════════════════════════
     # TIER 1: IDENTITY & SELF-REFERENCE
-    # Priority: Personal statements about self
     # ════════════════════════════════════════════════════════════════
     if "I" in words_set:
-        if "HAPPY" in words_set:
-            return f"I am {user_name} and I am feeling very happy."
-        if "SAD" in words_set:
-            return f"I am {user_name} and I am feeling sad."
-        if "GOOD" in words_set and "TIME" not in words_set:
-            return f"I am {user_name} and I am doing well."
-        if "TEACHER" in words_set:
-            return f"I am {user_name}, and I am a teacher."
+        if "HAPPY" in words_set: return f"I am {user_name} and I am feeling very happy.", True
+        if "SAD" in words_set: return f"I am {user_name} and I am feeling sad.", True
+        if "GOOD" in words_set and "TIME" not in words_set: return f"I am {user_name} and I am doing well.", True
+        if "TEACHER" in words_set: return f"I am {user_name}, and I am a teacher.", True
         if "FATHER" in words_set:
-            if "GOOD" in words_set:
-                return f"My father is doing well."
-            else:
-                return f"This is about my father."
+            if "GOOD" in words_set: return f"My father is doing well.", True
+            else: return f"This is about my father.", True
         if "MOTHER" in words_set:
-            if "GOOD" in words_set:
-                return f"My mother is doing well."
-            else:
-                return f"This is about my mother."
-        if len(words_set) == 1:
-            # Single "I" - simple identity statement
-            return f"I am {user_name}."
+            if "GOOD" in words_set: return f"My mother is doing well.", True
+            else: return f"This is about my mother.", True
+        if len(words_set) == 1: return f"I am {user_name}.", True
     
     # ════════════════════════════════════════════════════════════════
     # TIER 2: QUESTIONS & REQUESTS
-    # Priority: Interrogative patterns
     # ════════════════════════════════════════════════════════════════
     if "TIME" in words_set:
-        if "YOU" in words_set or "YOU (PLURAL)" in words_set:
-            return "Could you please tell me the current time?"
-        if "GOOD" in words_set:
-            return "Is this a good time?"
-        return "What is the time?"
+        if "YOU" in words_set or "YOU_PLURAL" in words_set: return "Could you please tell me the current time?", True
+        if "GOOD" in words_set: return "Is this a good time?", True
+        return "What is the time?", True
     
-    if "YOU" in words_set:
-        if "HAPPY" in words_set:
-            return "Are you happy?"
-        if "GOOD" in words_set:
-            return "Are you doing well?"
-        if "TEACHER" in words_set and len(words_set) == 2:
-            return "You are the teacher."
+    if "YOU" in words_set or "YOU_PLURAL" in words_set:
+        if "HAPPY" in words_set: return "Are you happy?", True
+        if "GOOD" in words_set: return "Are you doing well?", True
+        if "TEACHER" in words_set and len(words_set) == 2: return "You are the teacher.", True
     
     # ════════════════════════════════════════════════════════════════
     # TIER 3: GREETINGS & SOCIAL EXPRESSIONS
-    # Priority: Multi-word social phrases
     # ════════════════════════════════════════════════════════════════
     if "THANK YOU" in raw_joined:
-        if "TEACHER" in words_set:
-            return "Thank you very much, respected teacher."
-        return "Thank you so much."
+        if "TEACHER" in words_set: return "Thank you very much, respected teacher.", True
+        return "Thank you so much.", True
     
     if "GOOD MORNING" in raw_joined:
-        if "TEACHER" in words_set:
-            return "Good morning, respected panel members."
-        return "Good morning to everyone."
+        if "TEACHER" in words_set: return "Good morning, respected panel members.", True
+        return "Good morning to everyone.", True
     
     if "HELLO" in words_set:
-        if "TEACHER" in words_set:
-            return "Hello, honorable teacher."
-        if "GOOD" in words_set:
-            return "Hello, and good to see you."
-        return "Hello everyone."
+        if "TEACHER" in words_set: return "Hello, honorable teacher.", True
+        if "GOOD" in words_set: return "Hello, and good to see you.", True
+        return "Hello everyone.", True
     
     # ════════════════════════════════════════════════════════════════
-    # TIER 4: NORMALIZED FALLBACK
-    # For unmatched patterns - provide grammatical output
+    # TIER 4: NORMALIZED FALLBACK (Triggers LLM)
     # ════════════════════════════════════════════════════════════════
     normalized = normalize_gloss_order(words_ordered)
     capitalized = " ".join(normalized).capitalize()
     
-    # Smart punctuation based on content
-    if any(q in words_set for q in ["TIME", "YOU"]) and "THANK" not in raw_joined:
-        return capitalized + "?"
+    if any(q in words_set for q in ["TIME", "YOU", "YOU_PLURAL"]) and "THANK" not in raw_joined:
+        return capitalized + "?", False
     else:
-        return capitalized + "."
+        return capitalized + ".", False
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -672,12 +649,8 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
         )
         
         if should_finalize:
-            # ───────────────────────────────────────────────────────
-            # EXECUTE FINALIZATION
-            # ───────────────────────────────────────────────────────
-            
-            # Use enhanced grammar engine
-            final_sentence = parse_intent(sentence_buffer)
+            # 1. Unpack the new boolean flag
+            final_sentence, rule_matched = parse_intent(sentence_buffer)
             
             trigger_reason = "Idle Detection" if idle_triggered else f"Timeout ({dynamic_timeout:.1f}s)"
             
@@ -689,17 +662,19 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
             print(f"\033[90m║  Trigger: {trigger_reason[:44]:<44} ║\033[0m")
             print(f"\033[93m╚═══════════════════════════════════════════════════════╝\033[0m\n")
             
-            # Send to Jarvis orchestrator via queue
-            result_queue.put(final_sentence)
+            # 2. Push the tuple to the UI handler
+            result_queue.put((final_sentence, list(sentence_buffer), rule_matched))
             
-            # Write to bridge file for GUI
-            try:
-                with open(BRIDGE_PATH, "w") as f:
-                    f.write(final_sentence)
-            except Exception as e:
-                print(f"\033[91m[ISL] Bridge write error: {e}\033[0m")
+            # 3. CRITICAL FIX: Only write to bridge if rule matched.
+            # If false, the LLM thread will write it later!
+            if rule_matched:
+                try:
+                    with open(BRIDGE_PATH, "w") as f:
+                        f.write(final_sentence)
+                except Exception as e:
+                    print(f"\033[91m[ISL] Bridge write error: {e}\033[0m")
             
-            # Reset all sentence-level state
+            # 4. RESET ALL STATES (This is what went missing!)
             sentence_buffer.clear()
             last_detected_word = ""
             idle_counter = 0
@@ -708,7 +683,7 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
             word_hold_candidate = ""
             word_hold_start = 0
             
-            # Update buffer feedback queue (clear it)
+            # 5. Clear the live buffer UI
             if buffer_queue is not None:
                 try:
                     while not buffer_queue.empty():

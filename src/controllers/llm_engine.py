@@ -371,7 +371,6 @@ if __name__ == "__main__":
         ["TIME", "TEACHER"],
         ["I", "HAPPY", "TODAY"],
         ["YOU (PLURAL)", "COME", "TOMORROW"],
-        ["BOOK", "RED", "WHERE"]
     ]
     
     print("\n" + "─" * 70)
