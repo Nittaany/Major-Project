@@ -63,3 +63,6 @@ models/experiments/
 src/Gesture_Controller copy.py
 models/production/ISL_Model-0.tflite
 logs/
+
+# Security
+.env
