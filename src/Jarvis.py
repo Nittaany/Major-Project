@@ -1,4 +1,4 @@
-#* 2.5 updations
+#* 2.5/3.3 Hardened Core
 import sys
 import os
 import subprocess
@@ -32,15 +32,16 @@ except ImportError:
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ISL_BRIDGE_PATH = os.path.join(PROJECT_ROOT, "data", "isl_live.txt")
+VISION_BACKEND_PATH = os.path.join(PROJECT_ROOT, "src", "vision_backend.py") # <--- SECURE PATH
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STATE & QUEUES
 # ═══════════════════════════════════════════════════════════════════════════
 vision_process = None
 is_awake = True
+running_flag = True # <--- GRACEFUL SHUTDOWN FLAG
 voice_failure_count = 0  
 
-# These queues allow background threads to safely talk to the main UI thread
 isl_message_queue = queue.Queue() 
 voice_command_queue = queue.Queue()
 
@@ -50,7 +51,6 @@ def reply(text):
     except: pass
     if AUDIO_AVAILABLE:
         try:
-            # Clean HTML tags before speaking
             spoken_text = text.replace("<b>", "").replace("</b>", "").replace("<br>", " ")
             engine.say(spoken_text)
             engine.runAndWait()
@@ -65,7 +65,6 @@ def listen():
         with sr.Microphone() as source:
             r.pause_threshold = 0.8
             r.adjust_for_ambient_noise(source, duration=0.5)
-            # Removed the [LISTENING] print to stop console spam
             audio = r.listen(source, phrase_time_limit=5)
             query = r.recognize_google(audio, language='en-in')
             
@@ -82,11 +81,10 @@ def listen():
         return None
 
 # ═══════════════════════════════════════════════════════════════════════════
-# BACKGROUND THREADS (The Fix for the "Numb" Bug)
+# BACKGROUND THREADS
 # ═══════════════════════════════════════════════════════════════════════════
 def voice_worker():
-    """Runs the microphone continuously without blocking the system."""
-    while True:
+    while running_flag: # <--- SAFE LOOP
         if AUDIO_AVAILABLE and is_awake:
             query = listen()
             if query:
@@ -95,12 +93,11 @@ def voice_worker():
             time.sleep(0.5)
 
 def watch_isl_bridge():
-    """Watches the bridge file for translated signs."""
     last_isl_mod_time = 0
     if os.path.exists(ISL_BRIDGE_PATH):
         last_isl_mod_time = os.path.getmtime(ISL_BRIDGE_PATH)
     
-    while True:
+    while running_flag: # <--- SAFE LOOP
         try:
             if os.path.exists(ISL_BRIDGE_PATH):
                 current_mod_time = os.path.getmtime(ISL_BRIDGE_PATH)
@@ -119,12 +116,12 @@ def watch_isl_bridge():
 # COMMAND PROCESSOR
 # ═══════════════════════════════════════════════════════════════════════════
 def process_command(query):
-    global vision_process, is_awake
+    global vision_process, is_awake, running_flag
     query = query.lower().strip()
     
     if "start" in query or "launch" in query:
         if vision_process is None:
-            vision_process = subprocess.Popen([sys.executable, 'src/vision_backend.py'])
+            vision_process = subprocess.Popen([sys.executable, VISION_BACKEND_PATH]) # <--- SECURE LAUNCH
             reply("Vision System Active.")
         else:
             reply("Already running.")
@@ -154,14 +151,12 @@ def process_command(query):
         reply("Online and ready.")
 
     elif "exit" in query or "bye" in query:
+        running_flag = False # <--- TRIGGER CLEAN SHUTDOWN
         if vision_process: vision_process.terminate()
         if platform.system() == "Darwin": os.system("pkill -f vision_backend.py")
         reply("Shutting down. Goodbye.")
+        time.sleep(1) # Let UI update
         os._exit(0)
-
-    elif "help" in query:
-        help_text = "<b>Available Commands:</b><br>- 'start' (launch camera)<br>- 'stop' (kill camera)<br>- 'time' / 'date'<br>- 'sleep' / 'wake up'<br>- 'exit' (close system)"
-        reply(help_text)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN EVENT LOOP
@@ -175,12 +170,10 @@ if __name__ == "__main__":
         time.sleep(0.5)
     
     reply("System Initialized. I am Jarvis, how may I help you?")
-    help_text = "<b>Available Commands:</b><br>- 'start' (launch camera)<br>- 'stop' (kill camera)<br>- 'time' / 'date'<br>- 'sleep' / 'wake up'<br>- 'exit' (close system)"
-    reply(help_text)
     
-    vision_process = subprocess.Popen([sys.executable, 'src/vision_backend.py'])
+    # Auto-launch vision with secure path
+    vision_process = subprocess.Popen([sys.executable, VISION_BACKEND_PATH])
     
-    # Launch Background Threads
     watcher_thread = threading.Thread(target=watch_isl_bridge)
     watcher_thread.daemon = True
     watcher_thread.start()
@@ -190,21 +183,17 @@ if __name__ == "__main__":
         voice_thread.daemon = True
         voice_thread.start()
     
-    # High-Speed Main Loop
-    while True:
-        # 1. Check ISL Translation Queue
+    while running_flag: # <--- SAFE LOOP
         while not isl_message_queue.empty():
             word = isl_message_queue.get()
             reply(f"ISL Translation: <b>{word.upper()}</b>")
             
-        # 2. Check UI Text Input
         if app.ChatBot.isUserInput():
             query = app.ChatBot.popUserInput()
             app.ChatBot.addUserMsg(query)
             voice_failure_count = 0 
             process_command(query)
             
-        # 3. Check Voice Command Queue
         while not voice_command_queue.empty():
             query = voice_command_queue.get()
             if query == "_SYSTEM_TEXT_FALLBACK_":
@@ -215,8 +204,7 @@ if __name__ == "__main__":
                 app.ChatBot.addUserMsg(query)
                 process_command(query)
         
-        time.sleep(0.1) # 100hz refresh rate ensures zero lag
-
+        time.sleep(0.1)
 # 2.5
 # import sys
 # import os

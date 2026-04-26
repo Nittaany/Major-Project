@@ -199,12 +199,20 @@ class HybridLLM:
             return " ".join(normalized).capitalize() + ".", "raw"
 
         # 3. Execute with 5-second timeout protection
+# 3. Execute with 5-second timeout protection
+        start_time = time.time() # <--- START LATENCY TIMER
         try:
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(_run_engine)
                 result, source = future.result(timeout=5.0) 
+                
+                end_time = time.time() # <--- END LATENCY TIMER
+                latency_ms = (end_time - start_time) * 1000
+                
                 self.cache[cache_key] = result
+                print(f"\033[96m║  [Metric] Latency: {latency_ms:.0f} ms{'':<22} ║\033[0m") # <--- LOG IT
                 return result, source
+                
         except concurrent.futures.TimeoutError:
             print("\033[91m[LLM] ⏱️ TIMEOUT: Generation exceeded 5 seconds. Bailing out!\033[0m")
             return " ".join(normalized).capitalize() + ".", "raw_timeout"

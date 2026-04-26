@@ -368,13 +368,13 @@ def parse_intent(buffer, user_name="Satyam"):
     # ════════════════════════════════════════════════════════════════
     if "I" in words_set:
         if "HAPPY" in words_set and len(words_set) == 2: 
-            return f"I am {user_name} and I am feeling very happy.", True
+            return f" I am feeling very happy.", True
         if "SAD" in words_set and len(words_set) == 2: 
-            return f"I am {user_name} and I am feeling sad.", True
+            return f" I am feeling sad.", True
         if "TEACHER" in words_set and len(words_set) == 2: 
-            return f"I am {user_name}, and I am a teacher.", True
+            return f" I am a teacher.", True
         if len(words_set) == 1: 
-            return f"I am {user_name}.", True
+            return f" I am {user_name}.", True
     
     # ════════════════════════════════════════════════════════════════
     # TIER 2: QUESTIONS & REQUESTS
