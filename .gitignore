@@ -43,8 +43,7 @@ build/
 
 # --- Project Data (CRITICAL: Do not upload these) ---
 data/raw/
-data/processed/
-*.npy
+data/processed/Custom Data + Include 50
 
 # --- Models ---
 # Ignore heavy training checkpoints
