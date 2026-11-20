@@ -15,14 +15,6 @@
 
 ---
 
-## Live System Preview
-
-<p align="center">
-  <img src="https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/ui_demo%202.jpeg" width="760" alt="Jarvis-EcoSign Eel Web GUI and Live Terminal Pipeline" />
-</p>
-
----
-
 ## What Problem Does Jarvis-EcoSign Solve?
 
 Existing assistive gesture systems suffer from two structural bottlenecks:
