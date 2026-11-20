@@ -8,7 +8,7 @@
 
 ## Live System Preview
 
-![Jarvis-EcoSign Eel Web GUI and Live Pipeline](https://0j0ljm5uoqzqkt2q.private.blob.vercel-storage.com/ui_demo.jpeg?vercel-blob-valid-until=1795200301402&vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfMGowbEpNNXVPcXpxa1QycSIsIm93bmVySWQiOiJ0ZWFtX2szbnZYdFExb3l3ZkFQb2piVmo2d1VueCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzk1MjQzNDEzNzc0LCJpYXQiOjE3OTUyMDAyMTM5Mjd9.-W6rXpNuFYMA-DzHfN6_q6B12P_p3YukxJQtvzalDO0&vercel-blob-signature=kdV14K9U4RhKaamPvFju7b0mggbPWu01OZyl4A9BRac)
+![Jarvis-EcoSign Eel Web GUI and Live Pipeline](https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/ui_demo.jpeg)
 
 ---
 
@@ -30,7 +30,7 @@ Existing assistive gesture systems force a functional split: they provide either
 
 ## System Architecture
 
-![System Architecture](https://0j0ljm5uoqzqkt2q.private.blob.vercel-storage.com/architecture.png?vercel-blob-valid-until=1795200343735&vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfMGowbEpNNXVPcXpxa1QycSIsIm93bmVySWQiOiJ0ZWFtX2szbnZYdFExb3l3ZkFQb2piVmo2d1VueCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzk1MjQzNDEzNzc0LCJpYXQiOjE3OTUyMDAyMTM5Mjd9.-W6rXpNuFYMA-DzHfN6_q6B12P_p3YukxJQtvzalDO0&vercel-blob-signature=PdKlNr2BDP911ap_x-GSRIjKhgop4bhKqxkRR2WiG58)
+![System Architecture](https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/architecture.png)
 
 | Module                          | Responsibility                                                                                   |
 | :------------------------------ | :----------------------------------------------------------------------------------------------- |
@@ -46,7 +46,7 @@ Existing assistive gesture systems force a functional split: they provide either
 
 ### 1. Throughput: GIL-Blocked vs. Zero-Copy Multiprocessing
 
-![FPS Benchmark](https://0j0ljm5uoqzqkt2q.private.blob.vercel-storage.com/fps_benchmark.jpg?vercel-blob-valid-until=1795200372118&vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfMGowbEpNNXVPcXpxa1QycSIsIm93bmVySWQiOiJ0ZWFtX2szbnZYdFExb3l3ZkFQb2piVmo2d1VueCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzk1MjQzNDEzNzc0LCJpYXQiOjE3OTUyMDAyMTM5Mjd9.-W6rXpNuFYMA-DzHfN6_q6B12P_p3YukxJQtvzalDO0&vercel-blob-signature=quU1IN_BNmXpahOHRtpsGG71jNhMa0MvpGW4RUpNKLc)
+![FPS Benchmark](https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/fps_benchmark.jpg)
 
 ### 2. Ablation Study (11-Class ISL Vocabulary, 532 Curated Sequences)
 
@@ -58,28 +58,28 @@ Evaluated on **532 video sequences** merging INCLUDE-50 subsets with custom webc
 | Shoulder-Invariant Normalization (no Idle)  |        59.3%        | Moderate flickering          |
 | **Final (Shoulder-Invariant + Idle Class)** |     **96.65%**      | **Substantially stabilized** |
 
-![11-Class Normalized Confusion Matrix](https://YOUR-VERCEL-BLOB-URL/major-project/confusion_matrix.png)
+![11-Class Normalized Confusion Matrix](https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/confusion_matrix.png)
 
 <details>
 <summary><strong>View Dataset Distribution & Training Curves (150 Epochs)</strong></summary>
 
 #### Dataset Class Distribution (532 Curated Sequences)
 
-![ISL Dataset Class Distribution](hhttps://0j0ljm5uoqzqkt2q.private.blob.vercel-storage.com/dataset.jpg?vercel-blob-valid-until=1795200386152&vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfMGowbEpNNXVPcXpxa1QycSIsIm93bmVySWQiOiJ0ZWFtX2szbnZYdFExb3l3ZkFQb2piVmo2d1VueCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzk1MjQzNDEzNzc0LCJpYXQiOjE3OTUyMDAyMTM5Mjd9.-W6rXpNuFYMA-DzHfN6_q6B12P_p3YukxJQtvzalDO0&vercel-blob-signature=lwOBv5XXwLb9Y8rdLppM20c4iSJmG9L6KTbD1ro5sdc)
+![ISL Dataset Class Distribution](https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/dataset.jpg)
 
 #### Training & Validation Convergence
 
-|                                                                                                                                                                                                                                         Accuracy Convergence                                                                                                                                                                                                                                          |                                                                                                                                                                                                                                       Loss Convergence                                                                                                                                                                                                                                       |
-| :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| ![Model Accuracy](hhttps://0j0ljm5uoqzqkt2q.private.blob.vercel-storage.com/accuracy.png?vercel-blob-valid-until=1795200402668&vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfMGowbEpNNXVPcXpxa1QycSIsIm93bmVySWQiOiJ0ZWFtX2szbnZYdFExb3l3ZkFQb2piVmo2d1VueCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzk1MjQzNDEzNzc0LCJpYXQiOjE3OTUyMDAyMTM5Mjd9.-W6rXpNuFYMA-DzHfN6_q6B12P_p3YukxJQtvzalDO0&vercel-blob-signature=jIO2yhXrWCCK-mcosPle5i9FWoVs-xu_D7QWG23Eyy0) | ![Model Loss](https://0j0ljm5uoqzqkt2q.private.blob.vercel-storage.com/Loss.png?vercel-blob-valid-until=1795200411102&vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfMGowbEpNNXVPcXpxa1QycSIsIm93bmVySWQiOiJ0ZWFtX2szbnZYdFExb3l3ZkFQb2piVmo2d1VueCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzk1MjQzNDEzNzc0LCJpYXQiOjE3OTUyMDAyMTM5Mjd9.-W6rXpNuFYMA-DzHfN6_q6B12P_p3YukxJQtvzalDO0&vercel-blob-signature=rmqHdCVqeb-cslqSOwLT8JVQfEdZEQNgFPva36LNl_U) |
+|                                  Accuracy Convergence                                   |                                Loss Convergence                                 |
+| :-------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------: |
+| ![Model Accuracy](https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/accuracy.png) | ![Model Loss](https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/Loss.png) |
 
 </details>
 
 ### 3. Temporal Intelligence & Hybrid LLM Output
 
-|                                                                                                                                                                                                            Temporal State Machine (Idle Commit & Cooldown)                                                                                                                                                                                                             |                                                                                                                                                                                                                  Local Apple MLX + Groq LLM Bridge                                                                                                                                                                                                                   |
-| :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
-| ![Temporal Engine](https://0j0ljm5uoqzqkt2q.private.blob.vercel-storage.com/temporal_engine.png?vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfMGowbEpNNXVPcXpxa1QycSIsIm93bmVySWQiOiJ0ZWFtX2szbnZYdFExb3l3ZkFQb2piVmo2d1VueCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzk1MjQzNjc4ODg5LCJpYXQiOjE3OTUyMDA0NzkwMzl9.DnBk-45fWg1j3HrDcgbA_hi4Piu9zfX1E230UtsodRM&vercel-blob-signature=rnuLXKTtT4BMUDtT-NAiwVEQwyVucwTP7M-_mRRIuIg) | ![MLX LLM Test](https://0j0ljm5uoqzqkt2q.private.blob.vercel-storage.com/mlx_llm_test.png.png?vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfMGowbEpNNXVPcXpxa1QycSIsIm93bmVySWQiOiJ0ZWFtX2szbnZYdFExb3l3ZkFQb2piVmo2d1VueCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzk1MjQzNjI2MTE2LCJpYXQiOjE3OTUyMDA0MjYyNzh9.MunJlyujXFHEFTdERz8wFCYF0GdZd49i8Dx35puHGzY&vercel-blob-signature=B5SB9EqNtrFTBq2pKq5Y64ptpXP67reELZ88IqB3kNo) |
+|                         Temporal State Machine (Idle Commit & Cooldown)                         |                               Local Apple MLX + Groq LLM Bridge                               |
+| :---------------------------------------------------------------------------------------------: | :-------------------------------------------------------------------------------------------: |
+| ![Temporal Engine](https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/temporal_engine.png) | ![MLX LLM Test](https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/mlx_llm_test.png.png) |
 
 ---
 

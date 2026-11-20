@@ -42,6 +42,7 @@ build/
 .vercel/
 
 # --- Project Data (CRITICAL: Do not upload these) ---
+data/
 data/raw/
 data/processed/Custom Data + Include 50
 
