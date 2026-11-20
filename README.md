@@ -74,7 +74,7 @@ Evaluated on **532 curated video sequences** (merging INCLUDE-50 subsets with cu
 | **Final (Shoulder-Invariant + Idle Class)** |     **96.65%**      | **Substantially stabilized** |
 
 <p align="center">
-  <img src="https://YOUR-VERCEL-BLOB-URL/major-project/confusion_matrix.png" width="580" alt="11-Class Normalized Confusion Matrix" />
+  <img src="https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/confusion_matrix.png" width="580" alt="11-Class Normalized Confusion Matrix" />
 </p>
 
 ### 3. Continuous Sign Language (CSLR) & Hybrid LLM Pipeline
