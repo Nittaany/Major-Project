@@ -30,7 +30,9 @@ Existing assistive gesture systems force a functional split: they provide either
 
 ## System Architecture
 
-![System Architecture](https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/architecture.png)
+<div style="width: 70%; overflow: hidden;">
+  <img src="https://q4rcgfyyqou1ialf.public.blob.vercel-storage.com/architecture.png" alt="System Architecture" style="width: 142%; max-width: none;" />
+</div>
 
 | Module                          | Responsibility                                                                                   |
 | :------------------------------ | :----------------------------------------------------------------------------------------------- |
