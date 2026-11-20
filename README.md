@@ -94,10 +94,19 @@ Raw frame-by-frame LSTM predictions flicker during hand transitions. Jarvis-EcoS
 <details>
 <summary><strong>1. Mathematical Foundations (Normalization, One Euro Filter & Sigmoid Ballistics)</strong></summary>
 
-- **Shoulder-Invariant Normalization:** Raw pixel coordinates break when users sit closer or farther from a webcam (studio-to-webcam domain shift). All 201 landmark coordinates are centered on the thoracic midpoint $P_{center}$ and scaled by the inter-acromion distance $D_{ref}$ between left ($S_L$) and right ($S_R$) shoulders, then clipped to $[-5.0, 5.0]$:
-  $$\hat{x}_i = \frac{x_i - P_{center,x}}{D_{ref}}, \quad \hat{y}_i = \frac{y_i - P_{center,y}}{D_{ref}}$$
-- **One Euro Filter (Jitter Suppression):** Adaptive first-order low-pass filter ($\hat{x}_i = \alpha x_i + (1 - \alpha)\hat{x}_{i-1}$) that heavily smooths slow micro-tremors while reducing lag during fast hand sweeps.
-- **Sigmoid Ballistic Gain:** Maps relative wrist velocity $v$ to cursor acceleration ($G_{min}=1.0$, $G_{max}=15.0$, $v_{inf}=25$, $k=0.2$) to prevent "Gorilla Arm" fatigue while keeping target acquisition under 500 ms.
+- **Shoulder-Invariant Normalization:** Raw pixel coordinates break when users sit closer or farther from a webcam (studio-to-webcam domain shift). All 201 landmark coordinates are centered on the thoracic midpoint (`P_center`) and scaled by the inter-acromion distance (`D_ref`) between left (`S_L`) and right (`S_R`) shoulders, then clipped to `[-5.0, 5.0]`:
+
+```math
+\hat{x}_i = \frac{x_i - P_{\text{center},x}}{D_{\text{ref}}}, \quad \hat{y}_i = \frac{y_i - P_{\text{center},y}}{D_{\text{ref}}}
+```
+
+- **One Euro Filter (Jitter Suppression):** Adaptive first-order low-pass filter that heavily smooths slow micro-tremors while reducing lag during fast hand sweeps:
+
+```math
+\hat{x}_i = \alpha x_i + (1 - \alpha)\hat{x}_{i-1}
+```
+
+- **Sigmoid Ballistic Gain:** Maps relative wrist velocity `v` to cursor acceleration (`G_min = 1.0`, `G_max = 15.0`, `v_inf = 25`, `k = 0.2`) to prevent "Gorilla Arm" fatigue while keeping target acquisition under 500 ms.
 
 </details>
 
@@ -159,9 +168,9 @@ Raw frame-by-frame LSTM predictions flicker during hand transitions. Jarvis-EcoS
 ## Quick Start (macOS Apple Silicon)
 
 ```bash
-git clone [https://github.com/Nittaany/Major-Project.git](https://github.com/Nittaany/Major-Project.git)
+git clone https://github.com/Nittaany/Major-Project.git
 cd Major-Project
-python3 -m venv venv && source venv/bin/activate
+python3.10 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 python3 src/Jarvis.py
 ```
