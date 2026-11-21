@@ -66,3 +66,7 @@ logs/
 
 # Security
 .env
+
+# training data
+data/raw/
+data/processed/X.npy
