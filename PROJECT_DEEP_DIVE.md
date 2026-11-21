@@ -22,8 +22,9 @@ rule-engine → LLM (Apple MLX local / Groq cloud) layer turns gloss sequences i
   with zero-copy NumPy views, eliminating ~27.6 MB/s of frame pickling and GIL contention; throughput 14 → 30 FPS *(author-measured)*.
 - Designed a shoulder-invariant landmark normalization (centroid + inter-shoulder scaling) over 201 MediaPipe Holistic
   features, fixing studio-to-webcam domain shift; added an `Idle` negative-control class (101 clips) to suppress false positives.
-- Trained and exported a Bi-LSTM (~159 K parameters) to TensorFlow Lite for CPU inference on Apple Silicon; evaluated
-  with a stratified held-out split *(report the exact number from `scripts/evaluate_tflite.py`)*.
+- Trained and exported a Bi-LSTM (~159 K parameters) to TensorFlow Lite for CPU inference on Apple Silicon; evaluated with
+  5-fold stratified cross-validation (**72.7 % ± 4.1 accuracy, macro-F1 0.73**, 532 clips, 11 classes) plus a reproducible
+  held-out script (85.2 %, 46/54, on the single 10 % split of the shipped model).
 - Built a temporal-intelligence engine (leaky 5-vote buffer, hysteresis confidence gate, 0.5 s hold confirmation,
   2.0 s cooldown, context-aware 3–6 s timeouts, 10-frame idle commit) converting flickering frame predictions into sentences.
 - Implemented a 3-tier hybrid translation path: deterministic rule parser → local 4-bit Qwen1.5-1.8B (MLX) → Groq Llama-3.1-8B,
@@ -104,20 +105,28 @@ Sub-pixel targets (W = 0.25 cm) fail at 60–90 % — a webcam resolution floor,
 | Whitelist | `WHITELIST_DIRS` in `data_extractor.py` restricts to 11 folders (targeted extraction) |
 | Architecture | `Bi-LSTM(64, return_sequences) → BN → Dropout .3 → LSTM(32) → BN → Dropout .3 → Dense(32, ReLU) → Dense(11, softmax)` |
 | Parameters (analytic) | Bi-LSTM 136,192 + BN 512 + LSTM 20,608 + BN 128 + Dense 1,056 + Dense 363 ≈ **158,859** (confirm with `model.summary()`) |
-| Training | Adam lr 5e-4, clipnorm 1.0, sparse CCE, 150 epochs, batch 8, EarlyStopping(25); `unroll=True` for TFLite on ARM64 |
+| Training | Adam lr 5e-4, clipnorm 1.0, sparse CCE, 150 epochs, batch 8; `unroll=True` for TFLite on ARM64. EarlyStopping was set to `monitor='loss'` (training loss) so it never fired: all 150 epochs ran and the shipped weights are the final epoch's |
 | Export | TFLite float32, builtin ops only |
 | Split | `train_test_split(test_size=0.1, stratify=y, random_state=42)` on 532 clips |
 
-**Ablation story (strong interview material):** raw coords ≈ 12.5 % → shoulder normalization 59.3 % → + Idle class 96.65 %.
-The lesson: representation (invariance) and *negative-class design* mattered more than model size.
+**Ablation claims:** earlier README numbers (raw ≈ 12.5 % → normalised 59.3 %) are **not reproducible from any retained log** — present them as
+"earlier informal experiments" or leave them out. What *is* supported: shoulder-invariant normalization is proven invariant by unit tests, and
+the Idle class exists to give the softmax a null option.
 
-### ⚠ Numbers to re-check before publishing
-1. **96.65 % cannot be a 54-clip held-out accuracy.** `ceil(0.1 × 532) = 54` test clips, so accuracy moves in steps of 1/54
-   (52/54 = 96.30 %, 53/54 = 98.15 %). It is probably Keras *validation* accuracy — which, if the same split drives
-   `EarlyStopping`, is optimistic. Run `scripts/evaluate_tflite.py` and quote **that** number, with N and macro-F1.
-2. **Signer leakage:** a random clip-level split can place the same signer/session in train and test. State this, or do a
-   signer-disjoint split (INCLUDE's official train/val/test lists exist for this — you already ship them).
-3. **Per-class support in a 54-clip test set is 4–10 clips**; always report counts next to percentages.
+### Verified results (use these)
+| Evaluation | Result |
+|---|---|
+| 5-fold stratified CV (`scripts/cross_validate.py`, 150 epochs, no epoch selection) | **72.74 % ± 4.06** accuracy, macro-F1 **0.726 ± 0.041** (folds: 70.1, 76.6, 74.5, 67.0, 75.5) |
+| Shipped `ISL_Model.tflite`, single stratified 10 % split (54 clips) | 85.19 % (46/54), macro-F1 0.859 — 95 % interval ≈ 73–92 % |
+| Weakest classes (pooled CV F1) | good 0.57, you (plural) 0.63, hello 0.67, idle 0.68, good morning 0.69 |
+| Strongest (pooled CV F1) | father 0.90, happy 0.88, thank you 0.79, teacher 0.79 |
+
+Notes: the 85.2 % split is above every CV fold (max 76.6 %), so treat it as a favourable draw, not the expected accuracy.
+`96.65 %` appears nowhere in the training log (best validation accuracy 92.6 %; nearest 96.x figures are *training* accuracy) — do not use it.
+Colab trained with `validation_data=(X_test, y_test)`; because the shipped weights are the last epoch (not selected on that data) the
+85.2 % is not checkpoint-selected, but epoch count/architecture were chosen while watching that split. Keep CV as the headline.
+Training shows overfitting (train ≈ 96 %, val ≈ 85 %; val-loss minimum ≈ epoch 120, then rising).
+Risks still to state: clip-level split (same signer/session may appear in train and test), your own recordings mixed with INCLUDE-50.
 
 ## 6. Temporal Intelligence Engine (`run_isl`)
 
@@ -179,7 +188,7 @@ per-action cooldowns (0.3 s click / 1.0 s system actions).
 
 ## 10. Honest limitations / things a reviewer may probe
 
-1. **Train/serve preprocessing gap:** training sanitises with `nan_to_num` + `clip(-5, 5)`; the live loop in `run_isl` feeds
+1. ~~**Train/serve preprocessing gap:**~~ **FIXED** (live loop now applies `nan_to_num` + `clip(-5, 5)` like training): training sanitises with `nan_to_num` + `clip(-5, 5)`; the live loop in `run_isl` feeds
    `normalize_features` output straight into TFLite with no clip. Add the same two lines before `np.expand_dims`.
    (The training script isn't in the repo tree — commit it; recruiters want to see it.)
 2. **Possible mirror skew:** `vision_backend.py` does `cv2.flip(frame, 1)` before writing to shared memory; `data_extractor.py` ("No Flip")
@@ -190,6 +199,12 @@ per-action cooldowns (0.3 s click / 1.0 s system actions).
 5. macOS-only bindings (⌘ hotkeys, MLX); Gesture_Controller*.py are legacy files that can be moved to `archive/`.
 6. Large commented-out legacy blocks in `Jarvis.py` / `vision_backend.py` / `ISL_Controller.py` — delete (git has history).
 7. `record_custom_data.py` hard-codes `/Users/nitant/...`; make it relative to repo root.
+8. **Frame handshake:** `vision_backend.py` calls `frame_ready.set()` every frame and only clears it on shutdown, so the HCI and ISL loops free-run
+   on whatever frame is in shared memory (duplicates/skips; no read lock). Effective ISL window length depends on CPU speed.
+9. **Training/inference time base:** training resamples a whole clip (≈2–3 s) to 30 frames; live inference uses the last 30 loop iterations.
+10. **Training recipe:** EarlyStopping watches training loss (never stops); validation set == test set; no class weights or augmentation.
+11. Idle recall in CV is ≈ 66 % (≈ 1 in 3 idle clips read as a sign) — the runtime confidence gate/hold-confirmation exists to absorb this, but its
+    effect has not been measured separately.
 
 ## 11. Suggested README restructure (recruiter-first)
 
@@ -203,7 +218,7 @@ per-action cooldowns (0.3 s click / 1.0 s system actions).
 ## 12. Likely interview questions (with the answer the code supports)
 
 - *Why shared memory over a Queue?* Queue pickles 0.92 MB frames 30×/s and serialises on the GIL; shared memory is a view — `O(1)` reads.
-- *Why an Idle class?* Softmax must pick something; without a null class every frame is a false positive. Ablation: 59.3 % → 96.65 % *(re-measure)*.
+- *Why an Idle class?* Softmax must pick something; without a null class every frame is a false positive. Idle recall is ≈ 66 % in CV, so it reduces but does not eliminate false positives; the temporal gate handles the rest *(effect not separately measured)*.
 - *Why normalise by shoulder width?* Removes camera distance/body size; proven invariant to scale + translation by test.
 - *Why a leaky buffer instead of clearing?* Clearing on one low-confidence frame throws away evidence during hand transitions; majority-of-5 decays gracefully.
 - *How do you guard the LLM path?* Rule parser first, 5 s timeout, retry, cache, raw fallback — the UI never blocks.
