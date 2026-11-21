@@ -701,6 +701,7 @@ def run_isl(shm_name, shape, frame_ready_event, stop_event, result_queue, mode_f
         # ═══════════════════════════════════════════════════════════
         
         keypoints = normalize_features(results)
+        keypoints = np.clip(np.nan_to_num(keypoints, nan=0.0, posinf=5.0, neginf=-5.0), -5.0, 5.0)  # same as training
         sequence.append(keypoints)
         
         # Need full window for LSTM
