@@ -70,3 +70,6 @@ logs/
 # training data
 data/raw/
 data/processed/X.npy
+data/isl_live.txt
+data/llm_mode.txt
+.pytest_cache/
